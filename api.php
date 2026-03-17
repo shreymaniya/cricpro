@@ -74,6 +74,140 @@ function upsertMatchScorecard(PDO $db, int $matchId, ?array $scorecard): void {
     )->execute($payload);
 }
 
+function inningsOversForNRR(?array $innings, int $maxBalls, int $maxWickets): float {
+    if (!$innings) {
+        return 0.0;
+    }
+
+    $balls = (int)($innings['balls'] ?? 0);
+    $wickets = (int)($innings['wickets'] ?? 0);
+    if ($balls <= 0) {
+        return 0.0;
+    }
+
+    if ($wickets >= $maxWickets && $maxBalls > 0 && $balls < $maxBalls) {
+        return $maxBalls / 6;
+    }
+
+    return $balls / 6;
+}
+
+function recalculateTeamStandings(PDO $db): void {
+    $db->exec("UPDATE teams SET played = 0, won = 0, lost = 0, nr = 0, nrr = 0");
+
+    $matches = $db->query(
+        "SELECT id, team1_code, team2_code, winner_code, overs_per_innings, max_wickets, scorecard_json
+         FROM matches
+         WHERE status = 'completed'"
+    )->fetchAll();
+
+    $playedStmt = $db->prepare("UPDATE teams SET played = played + 1 WHERE code = :code");
+    $wonStmt = $db->prepare("UPDATE teams SET won = won + 1 WHERE code = :code");
+    $lostStmt = $db->prepare("UPDATE teams SET lost = lost + 1 WHERE code = :code");
+    $nrStmt = $db->prepare("UPDATE teams SET nr = nr + 1 WHERE code = :code");
+
+    foreach ($matches as $match) {
+        $team1 = $match['team1_code'];
+        $team2 = $match['team2_code'];
+        $winner = $match['winner_code'] ?? null;
+
+        $playedStmt->execute(['code' => $team1]);
+        $playedStmt->execute(['code' => $team2]);
+
+        if ($winner === $team1) {
+            $wonStmt->execute(['code' => $team1]);
+            $lostStmt->execute(['code' => $team2]);
+        } elseif ($winner === $team2) {
+            $wonStmt->execute(['code' => $team2]);
+            $lostStmt->execute(['code' => $team1]);
+        } else {
+            $nrStmt->execute(['code' => $team1]);
+            $nrStmt->execute(['code' => $team2]);
+        }
+    }
+
+    $teamCodes = $db->query("SELECT code FROM teams")->fetchAll(PDO::FETCH_COLUMN);
+    foreach ($teamCodes as $code) {
+        recalcNRR($db, (string)$code);
+    }
+}
+
+function addMatchAppearance(array &$playedByTeam, string $teamCode, array $playerMap): void {
+    if ($teamCode === '') {
+        return;
+    }
+
+    if (!isset($playedByTeam[$teamCode])) {
+        $playedByTeam[$teamCode] = [];
+    }
+
+    foreach (array_keys($playerMap) as $playerName) {
+        $playedByTeam[$teamCode][$playerName] = true;
+    }
+}
+
+function recalculatePlayerStats(PDO $db): void {
+    $db->exec("UPDATE players SET matches_played = 0, total_runs = 0, total_wickets = 0");
+
+    $matches = $db->query(
+        "SELECT team1_code, team2_code, scorecard_json
+         FROM matches
+         WHERE status = 'completed' AND scorecard_json IS NOT NULL"
+    )->fetchAll();
+
+    $matchPlayedStmt = $db->prepare("UPDATE players SET matches_played = matches_played + 1 WHERE team_code = :team_code AND name = :name");
+    $runsStmt = $db->prepare("UPDATE players SET total_runs = total_runs + :runs WHERE team_code = :team_code AND name = :name");
+    $wicketsStmt = $db->prepare("UPDATE players SET total_wickets = total_wickets + :wickets WHERE team_code = :team_code AND name = :name");
+
+    foreach ($matches as $match) {
+        $scorecard = json_decode((string)$match['scorecard_json'], true);
+        if (!is_array($scorecard)) {
+            continue;
+        }
+
+        $playedByTeam = [];
+        foreach (['inn1', 'inn2'] as $innKey) {
+            $innings = $scorecard[$innKey] ?? null;
+            if (!is_array($innings)) {
+                continue;
+            }
+
+            $batTeam = strtoupper((string)($innings['batTeam'] ?? ''));
+            $bowlTeam = strtoupper((string)($innings['bowlTeam'] ?? ''));
+            $batsmen = is_array($innings['batsmen'] ?? null) ? $innings['batsmen'] : [];
+            $bowlers = is_array($innings['bowlers'] ?? null) ? $innings['bowlers'] : [];
+
+            addMatchAppearance($playedByTeam, $batTeam, $batsmen);
+            addMatchAppearance($playedByTeam, $bowlTeam, $bowlers);
+
+            foreach ($batsmen as $playerName => $stats) {
+                $runsStmt->execute([
+                    'runs' => (int)($stats['runs'] ?? 0),
+                    'team_code' => $batTeam,
+                    'name' => $playerName,
+                ]);
+            }
+
+            foreach ($bowlers as $playerName => $stats) {
+                $wicketsStmt->execute([
+                    'wickets' => (int)($stats['wickets'] ?? 0),
+                    'team_code' => $bowlTeam,
+                    'name' => $playerName,
+                ]);
+            }
+        }
+
+        foreach ($playedByTeam as $teamCode => $players) {
+            foreach (array_keys($players) as $playerName) {
+                $matchPlayedStmt->execute([
+                    'team_code' => $teamCode,
+                    'name' => $playerName,
+                ]);
+            }
+        }
+    }
+}
+
 /* ============================================================
    GROUPS
    ============================================================ */
@@ -257,13 +391,9 @@ function handleMatches(string $m, ?int $id): void {
                            'id'=>$id
                         ]);
                     upsertMatchScorecard($db, $id, $scorecard);
-                    $row=$db->prepare("SELECT team1_code,team2_code FROM matches WHERE id=:id");
-                    $row->execute(['id'=>$id]); $mr=$row->fetch();
-                    $win=$b['winner_code']; $lose=$win===$mr['team1_code']?$mr['team2_code']:$mr['team1_code'];
-                    $db->prepare("UPDATE teams SET won=won+1,played=played+1 WHERE code=:c")->execute(['c'=>$win]);
-                    $db->prepare("UPDATE teams SET lost=lost+1,played=played+1 WHERE code=:c")->execute(['c'=>$lose]);
-                    recalcNRR($db, $win); recalcNRR($db, $lose);
-                    $db->commit(); respond(['message'=>'Result saved, NRR updated']);
+                    recalculateTeamStandings($db);
+                    recalculatePlayerStats($db);
+                    $db->commit(); respond(['message'=>'Result saved, NRR and player stats updated']);
                 } catch(Exception $e){ $db->rollBack(); respond(['error'=>$e->getMessage()],500); }
             } else {
                 $fields = [];
@@ -302,7 +432,18 @@ function handleMatches(string $m, ?int $id): void {
 
         case 'DELETE':
             if(!$id) respond(['error'=>'id required'],422);
-            $db->prepare("DELETE FROM matches WHERE id=:id")->execute(['id'=>$id]);
+            $db->beginTransaction();
+            try {
+                $scorecardDelete = $db->prepare("DELETE FROM match_scorecard WHERE match_id = :id");
+                $scorecardDelete->execute(['id' => $id]);
+                $db->prepare("DELETE FROM matches WHERE id=:id")->execute(['id'=>$id]);
+                recalculateTeamStandings($db);
+                recalculatePlayerStats($db);
+                $db->commit();
+            } catch (Exception $e) {
+                $db->rollBack();
+                respond(['error' => $e->getMessage()], 500);
+            }
             respond(['message'=>'Match deleted']);
 
         default: respond(['error'=>'Method not allowed'],405);
@@ -312,26 +453,48 @@ function handleMatches(string $m, ?int $id): void {
 /* NRR recalculation */
 function recalcNRR(PDO $db, string $code): void {
     $stmt=$db->prepare(
-        "SELECT m.team1_code,m.team2_code,ms.innings1_runs,ms.innings1_balls,ms.innings2_runs,ms.innings2_balls
+        "SELECT m.team1_code, m.team2_code, m.overs_per_innings, m.max_wickets, m.scorecard_json
          FROM matches m
-         JOIN match_scorecard ms ON ms.match_id=m.id
          WHERE m.status='completed' AND (m.team1_code=:c OR m.team2_code=:c)"
     );
     $stmt->execute(['c'=>$code]);
     $rows=$stmt->fetchAll();
-    $rsTotal=0;$obFaced=0;$rcTotal=0;$obBowled=0;
+    $rsTotal=0.0;$obFaced=0.0;$rcTotal=0.0;$obBowled=0.0;
     foreach($rows as $r){
-        if($r['team1_code']===$code){
-            $rsTotal+=$r['innings1_runs']??0; $obFaced+=($r['innings1_balls']??0)/6;
-            $rcTotal+=$r['innings2_runs']??0; $obBowled+=($r['innings2_balls']??0)/6;
-        } else {
-            $rsTotal+=$r['innings2_runs']??0; $obFaced+=($r['innings2_balls']??0)/6;
-            $rcTotal+=$r['innings1_runs']??0; $obBowled+=($r['innings1_balls']??0)/6;
+        $scorecard = json_decode((string)($r['scorecard_json'] ?? ''), true);
+        if (!is_array($scorecard)) {
+            continue;
+        }
+
+        $inn1 = is_array($scorecard['inn1'] ?? null) ? $scorecard['inn1'] : null;
+        $inn2 = is_array($scorecard['inn2'] ?? null) ? $scorecard['inn2'] : null;
+        if (!$inn1 || !$inn2) {
+            continue;
+        }
+
+        $maxBalls = (int)($r['overs_per_innings'] ?? 0) * 6;
+        $maxWickets = (int)($r['max_wickets'] ?? 10);
+        $inn1BatTeam = strtoupper((string)($inn1['batTeam'] ?? ''));
+        $inn2BatTeam = strtoupper((string)($inn2['batTeam'] ?? ''));
+
+        if ($inn1BatTeam === $code) {
+            $rsTotal += (int)($inn1['runs'] ?? 0);
+            $obFaced += inningsOversForNRR($inn1, $maxBalls, $maxWickets);
+            $rcTotal += (int)($inn2['runs'] ?? 0);
+            $obBowled += inningsOversForNRR($inn2, $maxBalls, $maxWickets);
+        } elseif ($inn2BatTeam === $code) {
+            $rsTotal += (int)($inn2['runs'] ?? 0);
+            $obFaced += inningsOversForNRR($inn2, $maxBalls, $maxWickets);
+            $rcTotal += (int)($inn1['runs'] ?? 0);
+            $obBowled += inningsOversForNRR($inn1, $maxBalls, $maxWickets);
         }
     }
-    $nrr=0;
-    if($obFaced>0&&$obBowled>0) $nrr=($rsTotal/$obFaced)-($rcTotal/$obBowled);
-    elseif($obFaced>0) $nrr=$rsTotal/$obFaced;
+
+    $nrr = 0.0;
+    if($obFaced>0 && $obBowled>0) {
+        $nrr = ($rsTotal / $obFaced) - ($rcTotal / $obBowled);
+    }
+
     $db->prepare("UPDATE teams SET nrr=:nrr WHERE code=:c")->execute(['nrr'=>round($nrr,3),'c'=>$code]);
 }
 

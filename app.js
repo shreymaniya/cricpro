@@ -199,6 +199,16 @@ function oversStr(balls) {
 
 function srCalc(runs, balls) { return balls ? (runs/balls*100).toFixed(1) : '0.0'; }
 function econCalc(runs, balls){ return balls ? (runs/(balls/6)).toFixed(2) : '0.00'; }
+function inningsOversForNRR(inn, match) {
+  if (!inn) return 0;
+  const balls = Number(inn.balls || 0);
+  const wickets = Number(inn.wickets || 0);
+  const maxBalls = Number(match.overs || 0) * 6;
+  const maxWickets = Number(match.maxW || 10);
+  if (!balls) return 0;
+  if (wickets >= maxWickets && maxBalls > 0 && balls < maxBalls) return maxBalls / 6;
+  return balls / 6;
+}
 
 function ta(code, size=36) {
   const c = getTeamColor(code);
@@ -294,14 +304,20 @@ function renderDashboard() {
 function calcNRR(teamCode) {
   let runsScored=0, oversFaced=0, runsConceded=0, oversBowled=0;
   matches.filter(m=>m.status==='completed').forEach(m=>{
-    if (!m.scorecard) return;
+    if (!m.scorecard?.inn1 || !m.scorecard?.inn2) return;
     const sc = m.scorecard;
-    if (m.t1===teamCode && sc.inn1) {
-      runsScored  += sc.inn1.runs;  oversFaced   += sc.inn1.balls/6;
-      runsConceded+= sc.inn2 ? sc.inn2.runs : 0; oversBowled += sc.inn2 ? sc.inn2.balls/6 : 0;
-    } else if (m.t2===teamCode && sc.inn2) {
-      runsScored  += sc.inn2.runs;  oversFaced   += sc.inn2.balls/6;
-      runsConceded+= sc.inn1 ? sc.inn1.runs : 0; oversBowled += sc.inn1 ? sc.inn1.balls/6 : 0;
+    const inn1Team = sc.inn1.batTeam || m.t1;
+    const inn2Team = sc.inn2.batTeam || m.t2;
+    if (inn1Team===teamCode) {
+      runsScored  += Number(sc.inn1.runs || 0);
+      oversFaced   += inningsOversForNRR(sc.inn1, m);
+      runsConceded+= Number(sc.inn2.runs || 0);
+      oversBowled += inningsOversForNRR(sc.inn2, m);
+    } else if (inn2Team===teamCode) {
+      runsScored  += Number(sc.inn2.runs || 0);
+      oversFaced   += inningsOversForNRR(sc.inn2, m);
+      runsConceded+= Number(sc.inn1.runs || 0);
+      oversBowled += inningsOversForNRR(sc.inn1, m);
     }
   });
   if (oversFaced===0 && oversBowled===0) return '+0.000';

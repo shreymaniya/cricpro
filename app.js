@@ -52,12 +52,38 @@ async function loadAllData() {
   renderPage('dashboard');
 }
 
+async function refreshTeamsAndMatches() {
+  const [t, m] = await Promise.all([
+    apiCall('teams'),
+    apiCall('matches'),
+  ]);
+  if (t) teams = t;
+  if (m) matches = m;
+}
+
+async function refreshPlayersData() {
+  const p = await apiCall('players');
+  if (p) players = p;
+}
+
 // ─── HELPERS ─────────────────────────────────────────────────
 function getTeam(code)     { return teams.find(t => t.code === code); }
 function getTeamName(code) { const t=getTeam(code); return t ? t.name : code; }
 function getTeamColor(code){ const t=getTeam(code); return t ? t.color : '#555'; }
 function teamPlayers(code) { return players.filter(p => p.team_code === code); }
 function nextId(arr)       { return arr.length ? Math.max(...arr.map(x=>x.id))+1 : 1; }
+function getActivePage()   { const p=document.querySelector('.page.active'); return p ? p.id.replace('page-','') : 'dashboard'; }
+function rerenderActivePage() { renderPage(getActivePage()); }
+
+function getMatchScorecard(match) {
+  if (match.scorecard) return match.scorecard;
+  if (!match.scorecard_json) return null;
+  try {
+    return JSON.parse(match.scorecard_json);
+  } catch {
+    return null;
+  }
+}
 
 function fmtDate(d) {
   if (!d) return '';
@@ -165,12 +191,12 @@ function renderDashboard() {
 function calcNRR(teamCode) {
   let runsScored=0, oversFaced=0, runsConceded=0, oversBowled=0;
   matches.filter(m=>m.status==='completed').forEach(m=>{
-    if (!m.scorecard) return;
-    const sc = m.scorecard;
-    if (m.t1===teamCode && sc.inn1) {
+    const sc = getMatchScorecard(m);
+    if (!sc) return;
+    if (m.team1_code===teamCode && sc.inn1) {
       runsScored  += sc.inn1.runs;  oversFaced   += sc.inn1.balls/6;
       runsConceded+= sc.inn2 ? sc.inn2.runs : 0; oversBowled += sc.inn2 ? sc.inn2.balls/6 : 0;
-    } else if (m.t2===teamCode && sc.inn2) {
+    } else if (m.team2_code===teamCode && sc.inn2) {
       runsScored  += sc.inn2.runs;  oversFaced   += sc.inn2.balls/6;
       runsConceded+= sc.inn1 ? sc.inn1.runs : 0; oversBowled += sc.inn1 ? sc.inn1.balls/6 : 0;
     }
@@ -337,17 +363,19 @@ function saveTeam() {
   
   if (editTeamId) {
     // Update existing team
-    apiCall('teams', 'PUT', {name,color,group_name,captain,home_ground}, `&id=${editTeamId}`).then(res => {
-      const t = teams.find(x=>x.id===editTeamId);
-      if (t) Object.assign(t, {name,color,group_name,captain,home_ground});
+    apiCall('teams', 'PUT', {name,code,color,group_name,captain,ground:home_ground}, `&id=${editTeamId}`).then(async res => {
+      if (!res) return;
+      await Promise.all([refreshTeamsAndMatches(), refreshPlayersData()]);
+      refreshGroupSelects();
       renderTeams();
+      renderPlayers();
       closeModal('modal-add-team');
       editTeamId=null;
       showToast('Team updated');
-    }).catch(e => showToast(`Update failed: ${e.message}`, 'error'));
+    });
   } else {
     // Create new team
-    apiCall('teams', 'POST', {name,code,color,group_name,captain,home_ground}).then(res => {
+    apiCall('teams', 'POST', {name,code,color,group_name,captain,ground:home_ground}).then(res => {
       if (res && res.id) {
         teams.push({id:res.id,name,code,color,group_name,captain,home_ground,played:0,won:0,lost:0,nr:0,nrr:0});
         renderTeams();
@@ -363,13 +391,14 @@ function deleteTeam(id) {
   if (!confirm('Delete team?')) return;
   
   apiCall('teams', 'DELETE', null, `&id=${id}`).then(res => {
+    const removedTeam = teams.find(t=>t.id===id);
     teams = teams.filter(t=>t.id!==id);
-    players = players.filter(p=>p.team_code!==id);
+    if (removedTeam) players = players.filter(p=>p.team_code!==removedTeam.code);
     renderTeams();
     renderPlayers();
     updateStats();
     showToast('Team deleted');
-  }).catch(e => showToast(`Delete failed: ${e.message}`, 'error'));
+  });
 }
 
 // ─── MATCHES ─────────────────────────────────────────────────
@@ -557,11 +586,11 @@ function savePlayer() {
   if(!name||!team_code) return showToast('Name and team required','error');
   
   if (editPlayerId) {
-    apiCall('players', 'PUT', {name,team_code,role,jersey_number,nationality}, `&id=${editPlayerId}`).then(res => {
+    apiCall('players', 'PUT', {name,team_code,role,jersey_number,nationality}, `&id=${editPlayerId}`).then(async res => {
       if (res) {
-        const p=players.find(x=>x.id===editPlayerId);
-        if (p) Object.assign(p,{name,team_code,role,jersey_number,nationality});
+        await refreshPlayersData();
         renderPlayers();
+        renderTeams();
         updateStats();
         closeModal('modal-add-player');
         editPlayerId=null;
@@ -573,6 +602,7 @@ function savePlayer() {
       if (res) {
         players.push({id:res.id,name,team_code,role,jersey_number,nationality,matches_played:0,total_runs:0,total_wickets:0});
         renderPlayers();
+        renderTeams();
         updateStats();
         closeModal('modal-add-player');
         editPlayerId=null;
@@ -1027,14 +1057,39 @@ function declareWinner() {
   const mIdx=matches.findIndex(m=>m.id===LS.matchId);
   if(mIdx!==-1){
     const m=matches[mIdx];
-    m.status='completed'; m.winner=winner; m.summary=summary;
-    m.s1=inn1?`${inn1.runs}/${inn1.wickets} (${oversStr(inn1.balls)})`:'-';
-    m.s2=inn2?`${inn2.runs}/${inn2.wickets} (${oversStr(inn2.balls)})`:'-';
-    m.scorecard={inn1,inn2};
-    const wt=getTeam(winner), lt=getTeam(winner===m.t1?m.t2:m.t1);
-    if(wt){wt.won++;wt.played++;}
-    if(lt){lt.lost++;lt.played++;}
-    save();
+    const score1=inn1?`${inn1.runs}/${inn1.wickets} (${oversStr(inn1.balls)})`:'-';
+    const score2=inn2?`${inn2.runs}/${inn2.wickets} (${oversStr(inn2.balls)})`:'-';
+    const loser=winner===m.team1_code ? m.team2_code : m.team1_code;
+    const scorecard={inn1,inn2};
+
+    Object.assign(m, {
+      status:'completed',
+      winner_code:winner,
+      result_summary:summary,
+      score1,
+      score2,
+      scorecard,
+      scorecard_json: JSON.stringify(scorecard),
+    });
+
+    const wt=getTeam(winner);
+    const lt=getTeam(loser);
+    if(wt){wt.won++;wt.played++;wt.nrr=parseFloat(calcNRR(winner))||0;}
+    if(lt){lt.lost++;lt.played++;lt.nrr=parseFloat(calcNRR(loser))||0;}
+
+    apiCall('matches', 'PUT', {
+      score1,
+      score2,
+      winner_code:winner,
+      result_summary:summary,
+      scorecard,
+    }, `&id=${LS.matchId}&result=1`).then(async res => {
+      if (!res) return;
+      await refreshTeamsAndMatches();
+      refreshGroupSelects();
+      updateStats();
+      rerenderActivePage();
+    });
   }
   document.getElementById('nav-live-badge').style.display='none';
   renderLivePage(); showToast(`🏆 Match over! ${summary}`);
@@ -1042,10 +1097,14 @@ function declareWinner() {
 
 function endLiveMatch() {
   if(!confirm('Clear live match data?')) return;
+  const matchId=LS.matchId;
   LS=JSON.parse(JSON.stringify(LS_DEF));
   saveLive();
-  const mIdx=matches.findIndex(m=>m.id===LS.matchId);
-  if(mIdx!==-1&&matches[mIdx].status==='live'){matches[mIdx].status='upcoming';save();}
+  const mIdx=matches.findIndex(m=>m.id===matchId);
+  if(mIdx!==-1&&matches[mIdx].status==='live'){
+    matches[mIdx].status='upcoming';
+    apiCall('matches', 'PUT', {status:'upcoming'}, `&id=${matchId}`);
+  }
   document.getElementById('nav-live-badge').style.display='none';
   renderLivePage(); showToast('Live match ended');
 }
@@ -1071,10 +1130,10 @@ function syncMatch() {
   const mIdx=matches.findIndex(m=>m.id===LS.matchId);
   if(mIdx===-1) return;
   const inn1=LS.innings[0],inn2=LS.innings[1];
-  matches[mIdx].s1=inn1?`${inn1.runs}/${inn1.wickets}`:'';
-  matches[mIdx].s2=inn2&&inn2.balls>0?`${inn2.runs}/${inn2.wickets}`:'';
-  save();
+  matches[mIdx].score1=inn1?`${inn1.runs}/${inn1.wickets}`:'';
+  matches[mIdx].score2=inn2&&inn2.balls>0?`${inn2.runs}/${inn2.wickets}`:'';
   if(document.getElementById('page-dashboard').classList.contains('active')) renderDashboard();
+  if(document.getElementById('page-matches').classList.contains('active')) renderMatches();
 }
 
 // ─── RENDER TOP BOARD ─────────────────────────────────────────
@@ -1086,9 +1145,9 @@ function renderTopBoard() {
   const s2=inn2&&inn2.balls>0?`${inn2.runs}/${inn2.wickets} (${oversStr(inn2.balls)})`:'-';
   document.getElementById('ls-top-board').innerHTML=`
     <div class="ls-tb-teams">
-      <div class="ls-tb-team">${ta(m.t1,42)}<div><div class="ls-tb-name">${getTeamName(m.t1)}</div><div class="ls-tb-score">${s1}</div></div></div>
+      <div class="ls-tb-team">${ta(m.team1_code,42)}<div><div class="ls-tb-name">${getTeamName(m.team1_code)}</div><div class="ls-tb-score">${s1}</div></div></div>
       <span class="ls-tb-vs">VS</span>
-      <div class="ls-tb-team">${ta(m.t2,42)}<div><div class="ls-tb-name">${getTeamName(m.t2)}</div><div class="ls-tb-score">${s2}</div></div></div>
+      <div class="ls-tb-team">${ta(m.team2_code,42)}<div><div class="ls-tb-name">${getTeamName(m.team2_code)}</div><div class="ls-tb-score">${s2}</div></div></div>
       <span class="ls-live-pill"><span class="live-dot" style="width:7px;height:7px"></span>${LS.status==='completed'?'FINAL':'LIVE'}</span>
     </div>
     <div class="ls-tb-right">
@@ -1201,22 +1260,23 @@ function renderMatchSummary() {
   const allBowlers=[...Object.entries(inn1?.bowlers||{}),...Object.entries(inn2?.bowlers||{})];
   const topBowl=allBowlers.sort((a,b)=>b[1].wickets-a[1].wickets)[0];
 
-  const winCol=getTeamColor(m.winner);
+  const winCode=m.winner_code;
+  const winCol=getTeamColor(winCode);
   summaryDiv.innerHTML=`
     <div class="ms-trophy">🏆</div>
     <div class="ms-title">MATCH OVER</div>
-    <div class="ms-winner" style="color:${winCol}">${getTeamName(m.winner)}</div>
+    <div class="ms-winner" style="color:${winCol}">${getTeamName(winCode)}</div>
     <div class="ms-scores">
       <div class="ms-team"><div class="ms-team-code" style="color:${getTeamColor(LS.t1)}">${LS.t1}</div><div class="ms-team-score">${inn1?inn1.runs+'/'+inn1.wickets:'—'}</div><div class="ms-team-name">${getTeamName(LS.t1)}</div><div style="font-size:.72rem;color:var(--muted)">${inn1?oversStr(inn1.balls)+' ov':''}</div></div>
       <div class="ms-vs">VS</div>
       <div class="ms-team"><div class="ms-team-code" style="color:${getTeamColor(LS.t2)}">${LS.t2}</div><div class="ms-team-score">${inn2?inn2.runs+'/'+inn2.wickets:'—'}</div><div class="ms-team-name">${getTeamName(LS.t2)}</div><div style="font-size:.72rem;color:var(--muted)">${inn2?oversStr(inn2.balls)+' ov':''}</div></div>
     </div>
-    <div class="ms-result">${m.summary||'Match Complete'}</div>
+    <div class="ms-result">${m.result_summary||'Match Complete'}</div>
     <div style="display:flex;gap:20px;justify-content:center;flex-wrap:wrap;margin-bottom:16px">
       ${topBat?`<div style="text-align:center"><div style="font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Top Scorer</div><div style="font-weight:700;color:var(--blue)">${topBat[0]}</div><div style="font-size:.8rem;color:var(--muted)">${topBat[1].runs} runs (${topBat[1].balls}b)</div></div>`:''}
       ${topBowl?`<div style="text-align:center"><div style="font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Top Bowler</div><div style="font-weight:700;color:var(--yellow)">${topBowl[0]}</div><div style="font-size:.8rem;color:var(--muted)">${topBowl[1].wickets}/${topBowl[1].runs} (${oversStr(topBowl[1].balls)})</div></div>`:''}
     </div>
-    ${m.potm?`<div class="ms-potm"><i class="fas fa-star"></i>Player of the Match: <strong>${m.potm}</strong></div>`:''}
+    ${m.player_of_match?`<div class="ms-potm"><i class="fas fa-star"></i>Player of the Match: <strong>${m.player_of_match}</strong></div>`:''}
     <div class="ms-btn-row">
       <button class="btn-ghost" onclick="showScorecard(${LS.matchId})" style="pointer-events:auto"><i class="fas fa-list"></i> Full Scorecard</button>
       <button class="btn-primary" onclick="endLiveMatch()"><i class="fas fa-check"></i> Done</button>

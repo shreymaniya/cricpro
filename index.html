@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CricketPro — Tournament Manager</title>
+  <link rel="stylesheet" href="styles.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+</head>
+<body>
+
+<aside class="sidebar" id="sidebar">
+  <div class="brand">
+    <div class="brand-icon">🏏</div>
+    <div><span class="brand-name">CricketPro</span><span class="brand-sub">Tournament Manager</span></div>
+  </div>
+  <nav class="nav-menu">
+    <a class="nav-item active" data-page="dashboard"><i class="fas fa-chart-line"></i><span>Dashboard</span></a>
+    <a class="nav-item" data-page="groups"><i class="fas fa-layer-group"></i><span>Groups</span></a>
+    <a class="nav-item" data-page="teams"><i class="fas fa-shield-alt"></i><span>Teams</span></a>
+    <a class="nav-item" data-page="matches"><i class="fas fa-calendar-alt"></i><span>Matches</span></a>
+    <a class="nav-item" data-page="players"><i class="fas fa-users"></i><span>Players</span></a>
+    <a class="nav-item" data-page="standings"><i class="fas fa-trophy"></i><span>Standings</span></a>
+    <a class="nav-item nav-live" data-page="livescore"><i class="fas fa-broadcast-tower"></i><span>Live Score</span><span class="nav-live-badge" id="nav-live-badge" style="display:none">LIVE</span></a>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="tournament-badge"><span class="dot"></span><span id="t-name-side">IPL 2025</span></div>
+  </div>
+</aside>
+
+<header class="topbar">
+  <button class="menu-toggle" id="menuToggle"><i class="fas fa-bars"></i></button>
+  <div class="topbar-title" id="page-title">Dashboard</div>
+  <div class="topbar-actions">
+    <div class="search-wrap"><i class="fas fa-search"></i><input type="text" placeholder="Search…" id="globalSearch"/></div>
+    <div class="avatar">AD</div>
+  </div>
+</header>
+
+<main class="main-content">
+
+<!-- ===== DASHBOARD ===== -->
+<section class="page active" id="page-dashboard">
+  <div class="page-header">
+    <div><h1 class="page-h1">Tournament Overview</h1><p class="page-sub">Track matches, teams & stats</p></div>
+    <button class="btn-primary" onclick="openModal('modal-tournament')"><i class="fas fa-plus"></i> New Tournament</button>
+  </div>
+  <div class="stats-grid">
+    <div class="stat-card green"><div class="stat-icon"><i class="fas fa-shield-alt"></i></div><div class="stat-info"><span class="stat-val" id="st-teams">0</span><span class="stat-lbl">Teams</span></div></div>
+    <div class="stat-card yellow"><div class="stat-icon"><i class="fas fa-calendar-check"></i></div><div class="stat-info"><span class="stat-val" id="st-matches">0</span><span class="stat-lbl">Matches</span></div></div>
+    <div class="stat-card red"><div class="stat-icon"><i class="fas fa-users"></i></div><div class="stat-info"><span class="stat-val" id="st-players">0</span><span class="stat-lbl">Players</span></div></div>
+    <div class="stat-card blue"><div class="stat-icon"><i class="fas fa-trophy"></i></div><div class="stat-info"><span class="stat-val" id="st-done">0</span><span class="stat-lbl">Completed</span></div></div>
+  </div>
+  <div class="two-col">
+    <div class="card live-card" id="dash-live-card">
+      <div class="card-head"><span class="live-dot"></span><h2>Live Match</h2></div>
+      <div id="dash-live-body"><div class="empty-state"><i class="fas fa-broadcast-tower"></i><p>No live match</p></div></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Recent Results</h2><a class="see-all" data-page="matches">See All</a></div>
+      <div class="results-list" id="dash-recent"></div>
+    </div>
+  </div>
+  <div class="card mt-20">
+    <div class="card-head"><h2>Points Table</h2><a class="see-all" data-page="standings">Full Table</a></div>
+    <div class="table-wrap"><table class="data-table"><thead><tr><th>Pos</th><th>Team</th><th>P</th><th>W</th><th>L</th><th>Pts</th><th>NRR</th></tr></thead><tbody id="dash-standings"></tbody></table></div>
+  </div>
+</section>
+
+<!-- ===== GROUPS ===== -->
+<section class="page" id="page-groups">
+  <div class="page-header">
+    <div><h1 class="page-h1">Tournament Groups</h1><p class="page-sub">Manage group stages</p></div>
+    <button class="btn-primary" onclick="openModal('modal-add-group')"><i class="fas fa-plus"></i> Add Group</button>
+  </div>
+  <div class="group-grid" id="group-grid"></div>
+</section>
+
+<!-- ===== TEAMS ===== -->
+<section class="page" id="page-teams">
+  <div class="page-header">
+    <div><h1 class="page-h1">Teams</h1><p class="page-sub">Manage all teams</p></div>
+    <button class="btn-primary" onclick="openModal('modal-add-team')"><i class="fas fa-plus"></i> Add Team</button>
+  </div>
+  <div class="filter-strip" id="team-group-filters"></div>
+  <div class="team-grid" id="team-grid"></div>
+</section>
+
+<!-- ===== MATCHES ===== -->
+<section class="page" id="page-matches">
+  <div class="page-header">
+    <div><h1 class="page-h1">Matches</h1><p class="page-sub">Schedule & manage fixtures</p></div>
+    <button class="btn-primary" onclick="openModal('modal-add-match')"><i class="fas fa-plus"></i> Schedule Match</button>
+  </div>
+  <div class="filter-strip">
+    <button class="filter-btn active" data-mf="all">All</button>
+    <button class="filter-btn" data-mf="upcoming">Upcoming</button>
+    <button class="filter-btn" data-mf="live">Live</button>
+    <button class="filter-btn" data-mf="completed">Completed</button>
+  </div>
+  <div id="matches-list"></div>
+</section>
+
+<!-- ===== PLAYERS ===== -->
+<section class="page" id="page-players">
+  <div class="page-header">
+    <div><h1 class="page-h1">Players</h1><p class="page-sub">Player registrations & profiles</p></div>
+    <div style="display:flex;gap:10px">
+      <button class="btn-ghost" onclick="openModal('modal-bulk-players')"><i class="fas fa-file-import"></i> Bulk Add</button>
+      <button class="btn-primary" onclick="openModal('modal-add-player')"><i class="fas fa-plus"></i> Add Player</button>
+    </div>
+  </div>
+  <div class="filter-strip">
+    <button class="filter-btn active" data-pf="all">All</button>
+    <button class="filter-btn" data-pf="batsman">Batsmen</button>
+    <button class="filter-btn" data-pf="bowler">Bowlers</button>
+    <button class="filter-btn" data-pf="allrounder">All-rounders</button>
+    <button class="filter-btn" data-pf="wicketkeeper">Keepers</button>
+  </div>
+  <div class="card"><div class="table-wrap"><table class="data-table"><thead><tr><th>#</th><th>Player</th><th>Team</th><th>Role</th><th>M</th><th>Runs</th><th>Wkts</th><th>Actions</th></tr></thead><tbody id="players-tbody"></tbody></table></div></div>
+</section>
+
+<!-- ===== STANDINGS ===== -->
+<section class="page" id="page-standings">
+  <div class="page-header"><div><h1 class="page-h1">Points Table</h1><p class="page-sub">Full standings with NRR</p></div></div>
+  <div id="standings-groups-container"></div>
+</section>
+
+<!-- ===== LIVE SCORE ===== -->
+<section class="page" id="page-livescore">
+  <div class="page-header">
+    <div><h1 class="page-h1">Live Score Center</h1><p class="page-sub">Ball-by-ball scoring</p></div>
+    <div style="display:flex;gap:10px">
+      <button class="btn-ghost" id="btn-end-match" style="display:none" onclick="endLiveMatch()"><i class="fas fa-stop-circle"></i> End Match</button>
+      <button class="btn-primary" id="btn-start-live" onclick="openModal('modal-start-live')"><i class="fas fa-play"></i> Start Live Match</button>
+    </div>
+  </div>
+
+  <!-- Idle -->
+  <div id="ls-idle" class="ls-idle">
+    <div class="ls-idle-icon">📡</div>
+    <h2>No Live Match</h2>
+    <p>Select an upcoming match to begin ball-by-ball scoring</p>
+    <button class="btn-primary" onclick="openModal('modal-start-live')"><i class="fas fa-play"></i> Start Live Match</button>
+  </div>
+
+  <!-- Active panel -->
+  <div id="ls-active" style="display:none">
+
+    <!-- Top scoreboard banner -->
+    <div class="ls-top-board" id="ls-top-board"></div>
+
+    <!-- Two column layout -->
+    <div class="ls-layout">
+
+      <!-- LEFT: Controls -->
+      <div class="ls-col-left">
+
+        <!-- Innings tabs -->
+        <div class="card ls-card">
+          <div class="ls-inn-tabs" id="ls-inn-tabs">
+            <button class="ls-inn-btn active" onclick="switchInnings(1)" data-inn="1">1st Innings</button>
+            <button class="ls-inn-btn" onclick="switchInnings(2)" data-inn="2">2nd Innings</button>
+          </div>
+          <div class="ls-inn-info" id="ls-inn-info">—</div>
+        </div>
+
+        <!-- Batsmen -->
+        <div class="card ls-card">
+          <div class="ls-ctrl-title"><i class="fas fa-baseball-bat-ball"></i> Batsmen on Crease</div>
+          <div class="ls-player-row striker">
+            <div class="ls-pl-label"><span class="strike-ind">★</span> Striker</div>
+            <select class="form-input ls-sel" id="sel-striker" onchange="setStriker()"></select>
+            <div class="ls-pl-stat" id="stat-striker">0(0)</div>
+          </div>
+          <div class="ls-player-row">
+            <div class="ls-pl-label">Non-Striker</div>
+            <select class="form-input ls-sel" id="sel-nonstriker" onchange="setNonStriker()"></select>
+            <div class="ls-pl-stat" id="stat-nonstriker">0(0)</div>
+          </div>
+        </div>
+
+        <!-- Current Bowler -->
+        <div class="card ls-card">
+          <div class="ls-ctrl-title"><i class="fas fa-baseball"></i> Current Bowler</div>
+          <div class="ls-player-row bowler">
+            <div class="ls-pl-label">Bowling</div>
+            <select class="form-input ls-sel" id="sel-bowler" onchange="setBowler()"></select>
+            <div class="ls-pl-stat" id="stat-bowler">0-0(0w)</div>
+          </div>
+        </div>
+
+        <!-- Ball Entry -->
+        <div class="card ls-card" id="ls-ball-entry">
+          <div class="ls-ctrl-title-row">
+            <span><i class="fas fa-dot-circle"></i> Ball Entry</span>
+            <span class="ls-over-chip" id="ls-over-chip">0.0 ov</span>
+          </div>
+          <div class="ball-pad">
+            <button class="ball-btn b-dot"    onclick="addBall('0')">0<small>dot</small></button>
+            <button class="ball-btn b-run"    onclick="addBall('1')">1</button>
+            <button class="ball-btn b-run"    onclick="addBall('2')">2</button>
+            <button class="ball-btn b-run"    onclick="addBall('3')">3</button>
+            <button class="ball-btn b-four"   onclick="addBall('4')">4<small>four</small></button>
+            <button class="ball-btn b-six"    onclick="addBall('6')">6<small>six</small></button>
+            <button class="ball-btn b-wicket" onclick="addBall('W')">W<small>wicket</small></button>
+            <button class="ball-btn b-extra"  onclick="addBall('Wd')">Wd<small>wide</small></button>
+            <button class="ball-btn b-extra"  onclick="addBall('Nb')">Nb<small>no ball</small></button>
+            <button class="ball-btn b-extra"  onclick="addBall('Lb')">Lb<small>leg bye</small></button>
+          </div>
+          <div class="ls-custom-row">
+            <input type="number" class="form-input" id="custom-runs" placeholder="Custom runs (e.g. 5)" min="0" max="99"/>
+            <button class="btn-primary" onclick="addCustomRuns()">Add</button>
+          </div>
+          <button class="btn-ghost w100 mt8" onclick="undoLastBall()"><i class="fas fa-undo"></i> Undo Last Ball</button>
+        </div>
+
+        <!-- Locked state: select next bowler -->
+        <div class="card ls-card" id="ls-bowler-lock" style="display:none">
+          <div class="ls-lock-head"><i class="fas fa-lock"></i> Over Complete!</div>
+          <div class="ls-lock-info" id="ls-lock-info">Select bowler for the next over.</div>
+          <select class="form-input" id="sel-next-bowler" style="margin:12px 0"></select>
+          <button class="btn-primary w100" onclick="confirmNextBowler()"><i class="fas fa-play"></i> Start Over</button>
+        </div>
+      </div>
+
+      <!-- RIGHT: Scoreboard display -->
+      <div class="ls-col-right">
+
+        <!-- Big score -->
+        <div class="card ls-score-card">
+          <div class="ls-score-batting" id="ls-batting-name">—</div>
+          <div class="ls-score-big" id="ls-score-big">0/0</div>
+          <div class="ls-score-overs" id="ls-score-overs">0.0 overs</div>
+          <div class="ls-rates-row">
+            <div class="ls-rate"><span>CRR</span><strong id="ls-crr">0.00</strong></div>
+            <div class="ls-rate"><span>RRR</span><strong id="ls-rrr">—</strong></div>
+            <div class="ls-rate"><span>Target</span><strong id="ls-target">—</strong></div>
+            <div class="ls-rate"><span>Need</span><strong id="ls-need">—</strong></div>
+          </div>
+          <div class="ls-this-over-row">
+            <span class="this-over-lbl">This over:</span>
+            <div class="this-over-balls" id="this-over-balls"></div>
+          </div>
+        </div>
+
+        <!-- Batting card -->
+        <div class="card ls-card">
+          <div class="ls-section-title">Batting <span id="bat-team-name"></span></div>
+          <table class="data-table ls-table"><thead><tr><th>Batsman</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th>SR</th><th>How Out</th></tr></thead><tbody id="bat-tbody"></tbody></table>
+          <div class="extras-bar" id="extras-bar">Extras: 0 (Wd:0 Nb:0 Lb:0)</div>
+        </div>
+
+        <!-- Bowling card -->
+        <div class="card ls-card">
+          <div class="ls-section-title">Bowling <span id="bowl-team-name"></span></div>
+          <table class="data-table ls-table"><thead><tr><th>Bowler</th><th>O</th><th>M</th><th>R</th><th>W</th><th>Econ</th></tr></thead><tbody id="bowl-tbody"></tbody></table>
+        </div>
+
+        <!-- Commentary -->
+        <div class="card ls-card">
+          <div class="ls-section-title"><i class="fas fa-microphone" style="color:var(--accent)"></i> Commentary</div>
+          <div class="commentary-feed" id="commentary-feed"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Match Summary (shown after match ends) -->
+    <div id="ls-match-summary" style="display:none">
+      <div class="match-summary-card" id="match-summary-content"></div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ============ MODALS ============ -->
+
+<!-- Tournament -->
+<div class="modal-overlay" id="modal-tournament">
+  <div class="modal">
+    <div class="modal-head"><h3>Create Tournament</h3><button class="modal-close" onclick="closeModal('modal-tournament')"><i class="fas fa-times"></i></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Tournament Name</label><input type="text" id="f-tname" class="form-input" placeholder="e.g. IPL 2025"/></div>
+      <div class="form-row">
+        <div class="form-group"><label>Start Date</label><input type="date" id="f-tstart" class="form-input"/></div>
+        <div class="form-group"><label>End Date</label><input type="date" id="f-tend" class="form-input"/></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Format</label><select id="f-tformat" class="form-input"><option>T20</option><option>ODI</option><option>Test</option><option>T10</option></select></div>
+        <div class="form-group"><label>Venue</label><input type="text" id="f-tvenue" class="form-input" placeholder="Main venue"/></div>
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn-ghost" onclick="closeModal('modal-tournament')">Cancel</button><button class="btn-primary" onclick="createTournament()">Create</button></div>
+  </div>
+</div>
+
+<!-- Add Group -->
+<div class="modal-overlay" id="modal-add-group">
+  <div class="modal">
+    <div class="modal-head"><h3>Add Group</h3><button class="modal-close" onclick="closeModal('modal-add-group')"><i class="fas fa-times"></i></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Group Name</label><input type="text" id="f-gname" class="form-input" placeholder="e.g. Group A"/></div>
+      <div class="form-group"><label>Stage</label><select id="f-gstage" class="form-input"><option value="group">Group Stage</option><option value="knockout">Knockout</option><option value="super">Super Stage</option></select></div>
+    </div>
+    <div class="modal-foot"><button class="btn-ghost" onclick="closeModal('modal-add-group')">Cancel</button><button class="btn-primary" onclick="addGroup()">Add</button></div>
+  </div>
+</div>
+
+<!-- Add Team -->
+<div class="modal-overlay" id="modal-add-team">
+  <div class="modal">
+    <div class="modal-head"><h3 id="team-modal-title">Add Team</h3><button class="modal-close" onclick="closeModal('modal-add-team')"><i class="fas fa-times"></i></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Team Name</label><input type="text" id="f-tname2" class="form-input" placeholder="e.g. Mumbai Indians"/></div>
+      <div class="form-row">
+        <div class="form-group"><label>Short Code</label><input type="text" id="f-tcode" class="form-input" placeholder="e.g. MI" maxlength="5"/></div>
+        <div class="form-group"><label>Color</label><input type="color" id="f-tcolor" class="form-input color-input" value="#1a73e8"/></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Group</label><select id="f-tgroup" class="form-input"><option value="">No Group</option></select></div>
+        <div class="form-group"><label>Captain</label><input type="text" id="f-tcaptain" class="form-input" placeholder="Captain name"/></div>
+      </div>
+      <div class="form-group"><label>Home Ground</label><input type="text" id="f-tground" class="form-input" placeholder="Ground name"/></div>
+    </div>
+    <div class="modal-foot"><button class="btn-ghost" onclick="closeModal('modal-add-team')">Cancel</button><button class="btn-primary" id="team-modal-btn" onclick="saveTeam()">Add Team</button></div>
+  </div>
+</div>
+
+<!-- Schedule Match -->
+<div class="modal-overlay" id="modal-add-match">
+  <div class="modal">
+    <div class="modal-head"><h3>Schedule Match</h3><button class="modal-close" onclick="closeModal('modal-add-match')"><i class="fas fa-times"></i></button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label>Team 1</label><select id="f-mt1" class="form-input"></select></div>
+        <div class="form-group"><label>Team 2</label><select id="f-mt2" class="form-input"></select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Match Date</label><input type="date" id="f-mdate" class="form-input"/></div>
+        <div class="form-group"><label>Venue</label><input type="text" id="f-mvenue" class="form-input" placeholder="Venue"/></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Overs Per Innings</label>
+          <select id="f-movers" class="form-input" onchange="toggleCustomOvers()">
+            <option value="20">T20 — 20 overs</option>
+            <option value="50">ODI — 50 overs</option>
+            <option value="10">T10 — 10 overs</option>
+            <option value="5">T5 — 5 overs</option>
+            <option value="custom">Custom…</option>
+          </select>
+        </div>
+        <div class="form-group" id="custom-overs-group" style="display:none">
+          <label>Custom Overs</label>
+          <input type="number" id="f-mcustom" class="form-input" placeholder="e.g. 8" min="1" max="200"/>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Max Wickets</label>
+          <select id="f-mwickets" class="form-input">
+            <option value="10">10 wickets</option>
+            <option value="8">8 wickets</option>
+            <option value="6">6 wickets</option>
+            <option value="auto">Auto (from squad)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Match Type</label>
+          <select id="f-mtype" class="form-input">
+            <option value="league">League Stage</option>
+            <option value="quarter">Quarter Final</option>
+            <option value="semi">Semi Final</option>
+            <option value="final">Final</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn-ghost" onclick="closeModal('modal-add-match')">Cancel</button><button class="btn-primary" onclick="scheduleMatch()">Schedule</button></div>
+  </div>
+</div>
+
+<!-- Add Player -->
+<div class="modal-overlay" id="modal-add-player">
+  <div class="modal">
+    <div class="modal-head"><h3 id="player-modal-title">Register Player</h3><button class="modal-close" onclick="closeModal('modal-add-player')"><i class="fas fa-times"></i></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Player Name</label><input type="text" id="f-pname" class="form-input" placeholder="Full name"/></div>
+      <div class="form-row">
+        <div class="form-group"><label>Team</label><select id="f-pteam" class="form-input"></select></div>
+        <div class="form-group"><label>Role</label><select id="f-prole" class="form-input"><option value="batsman">Batsman</option><option value="bowler">Bowler</option><option value="allrounder">All-rounder</option><option value="wicketkeeper">Wicket-keeper</option></select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Jersey No.</label><input type="number" id="f-pjersey" class="form-input" placeholder="e.g. 7"/></div>
+        <div class="form-group"><label>Country</label><input type="text" id="f-pcountry" class="form-input" placeholder="e.g. India"/></div>
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn-ghost" onclick="closeModal('modal-add-player')">Cancel</button><button class="btn-primary" id="player-modal-btn" onclick="savePlayer()">Register</button></div>
+  </div>
+</div>
+
+<!-- Bulk Players -->
+<div class="modal-overlay" id="modal-bulk-players">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-head"><h3>Bulk Add Players</h3><button class="modal-close" onclick="closeModal('modal-bulk-players')"><i class="fas fa-times"></i></button></div>
+    <div class="modal-body">
+      <div class="bulk-format-hint">
+        <strong>Format:</strong> One player per line<br>
+        <code>Name, TeamCode, Role, Jersey, Country</code><br>
+        <strong>Roles:</strong> batsman / bowler / allrounder / wicketkeeper<br><br>
+        <strong>Example:</strong><br>
+        <code>Rohit Sharma, MI, batsman, 45, India<br>Jasprit Bumrah, MI, bowler, 93, India</code>
+      </div>
+      <div class="form-group" style="margin-top:14px">
+        <label>Player Data</label>
+        <textarea id="f-bulk" class="form-input" rows="10" placeholder="Rohit Sharma, MI, batsman, 45, India&#10;Jasprit Bumrah, MI, bowler, 93, India"></textarea>
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn-ghost" onclick="closeModal('modal-bulk-players')">Cancel</button><button class="btn-primary" onclick="bulkAddPlayers()"><i class="fas fa-file-import"></i> Import Players</button></div>
+  </div>
+</div>
+
+<!-- Start Live Match -->
+<div class="modal-overlay" id="modal-start-live">
+  <div class="modal" style="max-width:540px">
+    <div class="modal-head"><h3>Start Live Match</h3><button class="modal-close" onclick="closeModal('modal-start-live')"><i class="fas fa-times"></i></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Select Match</label><select id="f-livematch" class="form-input" onchange="updateLiveTossTeams()"></select></div>
+      <div class="form-row">
+        <div class="form-group"><label>Toss Won By</label><select id="f-livetoss" class="form-input"></select></div>
+        <div class="form-group"><label>Elected To</label><select id="f-livechoice" class="form-input"><option value="bat">Bat</option><option value="bowl">Bowl</option></select></div>
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn-ghost" onclick="closeModal('modal-start-live')">Cancel</button><button class="btn-primary" onclick="startLiveMatch()"><i class="fas fa-play"></i> Begin Match</button></div>
+  </div>
+</div>
+
+<!-- Wicket Detail -->
+<div class="modal-overlay" id="modal-wicket">
+  <div class="modal">
+    <div class="modal-head"><h3>🏏 Wicket!</h3><button class="modal-close" onclick="closeModal('modal-wicket')"><i class="fas fa-times"></i></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Out Batsman</label><select id="f-wout" class="form-input"></select></div>
+      <div class="form-row">
+        <div class="form-group"><label>Dismissal</label><select id="f-wdismissal" class="form-input"><option value="bowled">Bowled</option><option value="caught">Caught</option><option value="lbw">LBW</option><option value="run out">Run Out</option><option value="stumped">Stumped</option><option value="hit wicket">Hit Wicket</option><option value="handled ball">Handled Ball</option></select></div>
+        <div class="form-group"><label>Fielder / Catcher</label><input type="text" id="f-wfielder" class="form-input" placeholder="Optional"/></div>
+      </div>
+      <div class="form-group"><label>New Batsman</label><select id="f-wnew" class="form-input"></select></div>
+    </div>
+    <div class="modal-foot"><button class="btn-ghost" onclick="closeModal('modal-wicket')">Cancel</button><button class="btn-primary" onclick="confirmWicket()">Confirm Wicket</button></div>
+  </div>
+</div>
+
+<!-- Match Scorecard Modal (from matches list) -->
+<div class="modal-overlay" id="modal-scorecard">
+  <div class="modal" style="max-width:720px">
+    <div class="modal-head"><h3>Match Scorecard</h3><button class="modal-close" onclick="closeModal('modal-scorecard')"><i class="fas fa-times"></i></button></div>
+    <div class="modal-body" id="scorecard-body" style="max-height:70vh;overflow-y:auto"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="app.js"></script>
+</body>
+</html>

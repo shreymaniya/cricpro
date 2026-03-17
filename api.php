@@ -29,6 +29,51 @@ match($resource) {
     default       => respond(['error' => "Unknown resource: $resource"], 404),
 };
 
+function resolveGroupId(PDO $db, ?string $groupName): ?int {
+    if ($groupName === null || $groupName === '') {
+        return null;
+    }
+
+    $stmt = $db->prepare("SELECT id FROM groups WHERE name = :name LIMIT 1");
+    $stmt->execute(['name' => $groupName]);
+    $groupId = $stmt->fetchColumn();
+
+    return $groupId !== false ? (int)$groupId : null;
+}
+
+function upsertMatchScorecard(PDO $db, int $matchId, ?array $scorecard): void {
+    if (!$scorecard) {
+        return;
+    }
+
+    $inn1 = $scorecard['inn1'] ?? [];
+    $inn2 = $scorecard['inn2'] ?? [];
+    $payload = [
+        'match_id' => $matchId,
+        'i1r' => (int)($inn1['runs'] ?? 0),
+        'i1b' => (int)($inn1['balls'] ?? 0),
+        'i2r' => (int)($inn2['runs'] ?? 0),
+        'i2b' => (int)($inn2['balls'] ?? 0),
+    ];
+
+    $exists = $db->prepare("SELECT id FROM match_scorecard WHERE match_id = :match_id LIMIT 1");
+    $exists->execute(['match_id' => $matchId]);
+
+    if ($exists->fetchColumn()) {
+        $db->prepare(
+            "UPDATE match_scorecard
+             SET innings1_runs = :i1r, innings1_balls = :i1b, innings2_runs = :i2r, innings2_balls = :i2b
+             WHERE match_id = :match_id"
+        )->execute($payload);
+        return;
+    }
+
+    $db->prepare(
+        "INSERT INTO match_scorecard (match_id, innings1_runs, innings1_balls, innings2_runs, innings2_balls)
+         VALUES (:match_id, :i1r, :i1b, :i2r, :i2b)"
+    )->execute($payload);
+}
+
 /* ============================================================
    GROUPS
    ============================================================ */
@@ -45,7 +90,7 @@ function handleGroups(string $m, ?int $id): void {
             respond(['id' => (int)$db->lastInsertId(), 'message' => 'Group created'], 201);
         case 'DELETE':
             if (!$id) respond(['error' => 'id required'], 422);
-            $db->prepare("UPDATE teams SET group_name=NULL WHERE group_id=:id")->execute(['id'=>$id]);
+            $db->prepare("UPDATE teams SET group_name=NULL, group_id=NULL WHERE group_id=:id OR group_name=(SELECT name FROM groups WHERE id=:id)")->execute(['id'=>$id]);
             $db->prepare("DELETE FROM groups WHERE id=:id")->execute(['id'=>$id]);
             respond(['message' => 'Group deleted']);
         default: respond(['error' => 'Method not allowed'], 405);
@@ -60,22 +105,40 @@ function handleTeams(string $m, ?int $id): void {
     switch ($m) {
         case 'GET':
             $filter = isset($_GET['group']) ? " WHERE t.group_name = :g" : '';
-            $stmt = $db->prepare("SELECT t.*, (t.won*2+t.nr) AS pts FROM teams t $filter ORDER BY pts DESC, t.nrr DESC");
+            $stmt = $db->prepare("SELECT t.*, COALESCE(g.name, t.group_name) AS group_name, (t.won*2+t.nr) AS pts FROM teams t LEFT JOIN groups g ON t.group_id = g.id $filter ORDER BY pts DESC, t.nrr DESC");
             $stmt->execute(isset($_GET['group']) ? ['g' => $_GET['group']] : []);
             respond($stmt->fetchAll());
 
         case 'POST':
             $b = getBody();
             if (empty($b['name']) || empty($b['code'])) respond(['error' => 'name and code required'], 422);
-            $db->prepare("INSERT INTO teams (name,code,color,group_name,captain,home_ground) VALUES (:n,:c,:col,:g,:cap,:gr)")
-               ->execute(['n'=>$b['name'],'c'=>strtoupper($b['code']),'col'=>$b['color']??'#555','g'=>$b['group_name']??null,'cap'=>$b['captain']??'','gr'=>$b['ground']??'']);
+            $groupName = trim((string)($b['group_name'] ?? ''));
+            $db->prepare("INSERT INTO teams (name,code,color,group_name,group_id,captain,home_ground) VALUES (:n,:c,:col,:g,:gid,:cap,:gr)")
+               ->execute([
+                   'n'=>$b['name'],
+                   'c'=>strtoupper($b['code']),
+                   'col'=>$b['color']??'#555',
+                   'g'=>$groupName !== '' ? $groupName : null,
+                   'gid'=>resolveGroupId($db, $groupName !== '' ? $groupName : null),
+                   'cap'=>$b['captain']??'',
+                   'gr'=>$b['ground']??''
+                ]);
             respond(['id'=>(int)$db->lastInsertId(),'message'=>'Team created'],201);
 
         case 'PUT':
             if (!$id) respond(['error'=>'id required'],422);
             $b = getBody();
-            $db->prepare("UPDATE teams SET name=COALESCE(:n,name),color=COALESCE(:col,color),group_name=COALESCE(:g,group_name),captain=COALESCE(:cap,captain),home_ground=COALESCE(:gr,home_ground) WHERE id=:id")
-               ->execute(['n'=>$b['name']??null,'col'=>$b['color']??null,'g'=>$b['group_name']??null,'cap'=>$b['captain']??null,'gr'=>$b['ground']??null,'id'=>$id]);
+            $groupName = trim((string)($b['group_name'] ?? ''));
+            $db->prepare("UPDATE teams SET name=:n,color=:col,group_name=:g,group_id=:gid,captain=:cap,home_ground=:gr WHERE id=:id")
+               ->execute([
+                   'n'=>$b['name'] ?? '',
+                   'col'=>$b['color'] ?? '#555',
+                   'g'=>$groupName !== '' ? $groupName : null,
+                   'gid'=>resolveGroupId($db, $groupName !== '' ? $groupName : null),
+                   'cap'=>$b['captain'] ?? '',
+                   'gr'=>$b['ground'] ?? '',
+                   'id'=>$id
+                ]);
             respond(['message'=>'Team updated']);
 
         case 'DELETE':
@@ -164,8 +227,18 @@ function handleMatches(string $m, ?int $id): void {
                 // Save result + update NRR
                 $db->beginTransaction();
                 try {
+                    $scorecard = is_array($b['scorecard'] ?? null) ? $b['scorecard'] : null;
                     $db->prepare("UPDATE matches SET score1=:s1,score2=:s2,winner_code=:w,result_summary=:rs,player_of_match=:pm,status='completed',scorecard_json=:sc WHERE id=:id")
-                       ->execute(['s1'=>$b['score1'],'s2'=>$b['score2'],'w'=>$b['winner_code'],'rs'=>$b['result_summary']??'','pm'=>$b['player_of_match']??'','sc'=>json_encode($b['scorecard']??null),'id'=>$id]);
+                       ->execute([
+                           's1'=>$b['score1'],
+                           's2'=>$b['score2'],
+                           'w'=>$b['winner_code'],
+                           'rs'=>$b['result_summary']??'',
+                           'pm'=>$b['player_of_match']??'',
+                           'sc'=>json_encode($scorecard),
+                           'id'=>$id
+                        ]);
+                    upsertMatchScorecard($db, $id, $scorecard);
                     $row=$db->prepare("SELECT team1_code,team2_code FROM matches WHERE id=:id");
                     $row->execute(['id'=>$id]); $mr=$row->fetch();
                     $win=$b['winner_code']; $lose=$win===$mr['team1_code']?$mr['team2_code']:$mr['team1_code'];
@@ -175,8 +248,37 @@ function handleMatches(string $m, ?int $id): void {
                     $db->commit(); respond(['message'=>'Result saved, NRR updated']);
                 } catch(Exception $e){ $db->rollBack(); respond(['error'=>$e->getMessage()],500); }
             } else {
-                $db->prepare("UPDATE matches SET status=COALESCE(:st,status),venue=COALESCE(:v,venue) WHERE id=:id")
-                   ->execute(['st'=>$b['status']??null,'v'=>$b['venue']??null,'id'=>$id]);
+                $fields = [];
+                $params = ['id' => $id];
+                $map = [
+                    'status' => 'status',
+                    'venue' => 'venue',
+                    'score1' => 'score1',
+                    'score2' => 'score2',
+                    'player_of_match' => 'player_of_match',
+                    'result_summary' => 'result_summary',
+                ];
+
+                foreach ($map as $bodyKey => $column) {
+                    if (array_key_exists($bodyKey, $b)) {
+                        $fields[] = "$column = :$bodyKey";
+                        $params[$bodyKey] = $b[$bodyKey];
+                    }
+                }
+
+                if (array_key_exists('scorecard', $b)) {
+                    $scorecard = is_array($b['scorecard']) ? $b['scorecard'] : null;
+                    $fields[] = "scorecard_json = :scorecard_json";
+                    $params['scorecard_json'] = json_encode($scorecard);
+                    upsertMatchScorecard($db, $id, $scorecard);
+                }
+
+                if (!$fields) {
+                    respond(['error' => 'No fields to update'], 422);
+                }
+
+                $db->prepare("UPDATE matches SET " . implode(', ', $fields) . " WHERE id=:id")
+                   ->execute($params);
                 respond(['message'=>'Match updated']);
             }
 
@@ -220,7 +322,7 @@ function recalcNRR(PDO $db, string $code): void {
    ============================================================ */
 function handleStandings(): void {
     $db=getDB();
-    $stmt=$db->query("SELECT t.*,(t.won*2+t.nr) AS pts,g.name AS group_name FROM teams t LEFT JOIN groups g ON t.group_id=g.id ORDER BY g.name,pts DESC,t.nrr DESC");
+    $stmt=$db->query("SELECT t.*,(t.won*2+t.nr) AS pts,COALESCE(g.name, t.group_name) AS group_name FROM teams t LEFT JOIN groups g ON t.group_id=g.id ORDER BY COALESCE(g.name, t.group_name),pts DESC,t.nrr DESC");
     respond($stmt->fetchAll());
 }
 

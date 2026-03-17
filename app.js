@@ -48,21 +48,137 @@ const D_MATCHES = [
 ];
 
 // ─── STATE ───────────────────────────────────────────────────
-let groups  = JSON.parse(localStorage.getItem('cp_groups'))  || D_GROUPS;
-let teams   = JSON.parse(localStorage.getItem('cp_teams'))   || D_TEAMS;
-let players = JSON.parse(localStorage.getItem('cp_players')) || D_PLAYERS;
-let matches = JSON.parse(localStorage.getItem('cp_matches')) || D_MATCHES;
+const API_BASE = 'api.php';
+let groups  = [];
+let teams   = [];
+let players = [];
+let matches = [];
 let editTeamId   = null;
 let editPlayerId = null;
 let matchFilter  = 'all';
 let playerFilter = 'all';
 let teamGroupFilter = 'all';
+let liveSyncTimer = null;
 
-function save() {
-  localStorage.setItem('cp_groups',  JSON.stringify(groups));
-  localStorage.setItem('cp_teams',   JSON.stringify(teams));
-  localStorage.setItem('cp_players', JSON.stringify(players));
-  localStorage.setItem('cp_matches', JSON.stringify(matches));
+function save() {}
+
+function parseScorecard(raw) {
+  if (!raw) return null;
+  if (typeof raw === 'string') {
+    try { return JSON.parse(raw); } catch (_) { return null; }
+  }
+  return raw;
+}
+
+function mapGroup(g) {
+  return { id:Number(g.id), name:g.name, stage:g.stage || 'group' };
+}
+
+function mapTeam(t) {
+  return {
+    id:Number(t.id),
+    name:t.name,
+    code:(t.code || '').toUpperCase(),
+    color:t.color || '#555',
+    group:t.group_name || '',
+    ground:t.home_ground || '',
+    captain:t.captain || '',
+    played:Number(t.played || 0),
+    won:Number(t.won || 0),
+    lost:Number(t.lost || 0),
+    nr:Number(t.nr || 0),
+    nrr:Number(t.nrr || 0),
+  };
+}
+
+function mapPlayer(p) {
+  return {
+    id:Number(p.id),
+    name:p.name,
+    team:(p.team_code || '').toUpperCase(),
+    role:p.role || 'batsman',
+    jersey:Number(p.jersey_number || 0),
+    country:p.nationality || '',
+    m:Number(p.matches_played || 0),
+    runs:Number(p.total_runs || 0),
+    wkts:Number(p.total_wickets || 0),
+  };
+}
+
+function mapMatch(m) {
+  return {
+    id:Number(m.id),
+    t1:(m.team1_code || '').toUpperCase(),
+    t2:(m.team2_code || '').toUpperCase(),
+    date:m.match_date,
+    venue:m.venue || '',
+    type:m.match_type || 'league',
+    overs:Number(m.overs_per_innings || 20),
+    maxW:Number(m.max_wickets || 10),
+    status:m.status || 'upcoming',
+    s1:m.score1 || '',
+    s2:m.score2 || '',
+    winner:m.winner_code || null,
+    summary:m.result_summary || '',
+    potm:m.player_of_match || '',
+    scorecard:parseScorecard(m.scorecard_json),
+  };
+}
+
+async function apiRequest(resource, { method='GET', id=null, params={}, body=null } = {}) {
+  const url = new URL(API_BASE, window.location.href);
+  url.searchParams.set('resource', resource);
+  if (id !== null && id !== undefined) url.searchParams.set('id', id);
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      url.searchParams.set(key, value);
+    }
+  });
+
+  const options = { method, headers:{} };
+  if (body !== null) {
+    options.headers['Content-Type'] = 'application/json';
+    options.body = JSON.stringify(body);
+  }
+
+  const response = await fetch(url.toString(), options);
+  let data = null;
+  try { data = await response.json(); } catch (_) {}
+  if (!response.ok) {
+    throw new Error(data?.error || `Request failed (${response.status})`);
+  }
+  return data;
+}
+
+async function loadAllData() {
+  const [groupData, teamData, playerData, matchData] = await Promise.all([
+    apiRequest('groups'),
+    apiRequest('teams'),
+    apiRequest('players'),
+    apiRequest('matches'),
+  ]);
+
+  groups = groupData.map(mapGroup);
+  teams = teamData.map(mapTeam);
+  players = playerData.map(mapPlayer);
+  matches = matchData.map(mapMatch);
+
+  if (teamGroupFilter !== 'all' && !groups.some(g => g.name === teamGroupFilter)) {
+    teamGroupFilter = 'all';
+  }
+}
+
+function activePage() {
+  const el = document.querySelector('.page.active');
+  return el ? el.id.replace('page-', '') : 'dashboard';
+}
+
+function refreshCurrentView() {
+  refreshGroupSelects();
+  updateStats();
+  renderDashboard();
+  const page = activePage();
+  if (page !== 'dashboard') renderPage(page);
 }
 
 // ─── HELPERS ─────────────────────────────────────────────────
@@ -235,23 +351,33 @@ function renderGroups() {
   }).join('');
 }
 
-function addGroup() {
+async function addGroup() {
   const name  = document.getElementById('f-gname').value.trim();
   const stage = document.getElementById('f-gstage').value;
   if (!name) return showToast('Group name required','error');
   if (groups.find(g=>g.name===name)) return showToast('Group already exists','error');
-  groups.push({ id:nextId(groups), name, stage });
-  save(); refreshGroupSelects(); renderGroups(); closeModal('modal-add-group');
-  document.getElementById('f-gname').value='';
-  showToast(`${name} created`);
+  try {
+    await apiRequest('groups', { method:'POST', body:{ name, stage } });
+    await loadAllData();
+    refreshCurrentView();
+    closeModal('modal-add-group');
+    document.getElementById('f-gname').value='';
+    showToast(`${name} created`);
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
 }
 
-function deleteGroup(id) {
+async function deleteGroup(id) {
   if (!confirm('Delete this group? Teams will be unassigned.')) return;
-  const g = groups.find(x=>x.id===id);
-  if (g) teams.forEach(t=>{ if(t.group===g.name) t.group=''; });
-  groups = groups.filter(x=>x.id!==id);
-  save(); refreshGroupSelects(); renderGroups();
+  try {
+    await apiRequest('groups', { method:'DELETE', id });
+    await loadAllData();
+    refreshCurrentView();
+    showToast('Group deleted');
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
 }
 
 function refreshGroupSelects() {
@@ -327,7 +453,7 @@ function openEditTeam(id) {
   openModal('modal-add-team');
 }
 
-function saveTeam() {
+async function saveTeam() {
   const name    = document.getElementById('f-tname2').value.trim();
   const code    = document.getElementById('f-tcode').value.trim().toUpperCase();
   const color   = document.getElementById('f-tcolor').value;
@@ -335,22 +461,41 @@ function saveTeam() {
   const captain = document.getElementById('f-tcaptain').value.trim();
   const ground  = document.getElementById('f-tground').value.trim();
   if (!name||!code) return showToast('Name and code required','error');
-  if (editTeamId) {
-    const t = teams.find(x=>x.id===editTeamId);
-    Object.assign(t, {name,color,group,captain,ground});
-    showToast('Team updated');
-  } else {
-    if (teams.find(t=>t.code===code)) return showToast('Team code exists','error');
-    teams.push({id:nextId(teams),name,code,color,group,captain,ground,played:0,won:0,lost:0,nr:0});
-    showToast(`${name} added`);
+  try {
+    if (editTeamId) {
+      await apiRequest('teams', {
+        method:'PUT',
+        id:editTeamId,
+        body:{ name, code, color, group_name:group, captain, ground }
+      });
+      showToast('Team updated');
+    } else {
+      if (teams.find(t=>t.code===code)) return showToast('Team code exists','error');
+      await apiRequest('teams', {
+        method:'POST',
+        body:{ name, code, color, group_name:group, captain, ground }
+      });
+      showToast(`${name} added`);
+    }
+    await loadAllData();
+    refreshCurrentView();
+    closeModal('modal-add-team');
+    editTeamId=null;
+  } catch (error) {
+    showToast(error.message, 'error');
   }
-  save(); renderTeams(); closeModal('modal-add-team'); editTeamId=null;
 }
 
-function deleteTeam(id) {
+async function deleteTeam(id) {
   if (!confirm('Delete team?')) return;
-  teams = teams.filter(t=>t.id!==id);
-  save(); renderTeams(); updateStats();
+  try {
+    await apiRequest('teams', { method:'DELETE', id });
+    await loadAllData();
+    refreshCurrentView();
+    showToast('Team deleted');
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
 }
 
 // ─── MATCHES ─────────────────────────────────────────────────
@@ -359,7 +504,7 @@ function toggleCustomOvers() {
   document.getElementById('custom-overs-group').style.display = v==='custom' ? 'block' : 'none';
 }
 
-function scheduleMatch() {
+async function scheduleMatch() {
   const t1    = document.getElementById('f-mt1').value;
   const t2    = document.getElementById('f-mt2').value;
   const date  = document.getElementById('f-mdate').value;
@@ -372,9 +517,26 @@ function scheduleMatch() {
   if (maxW==='auto') maxW = 10; else maxW = parseInt(maxW)||10;
   if (!t1||!t2||!date) return showToast('Teams and date required','error');
   if (t1===t2) return showToast('Teams must be different','error');
-  matches.push({id:nextId(matches),t1,t2,date,venue,type,overs,maxW,status:'upcoming',s1:'',s2:'',winner:null,summary:'',potm:'',scorecard:null});
-  save(); renderMatches(); updateStats(); closeModal('modal-add-match');
-  showToast('Match scheduled');
+  try {
+    await apiRequest('matches', {
+      method:'POST',
+      body:{
+        team1_code:t1,
+        team2_code:t2,
+        match_date:date,
+        venue,
+        match_type:type,
+        overs_per_innings:overs,
+        max_wickets:maxW,
+      }
+    });
+    await loadAllData();
+    refreshCurrentView();
+    closeModal('modal-add-match');
+    showToast('Match scheduled');
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
 }
 
 function renderMatches() {
@@ -420,9 +582,16 @@ document.querySelectorAll('.filter-btn[data-mf]').forEach(b=>{
   });
 });
 
-function deleteMatch(id) {
+async function deleteMatch(id) {
   if (!confirm('Delete match?')) return;
-  matches=matches.filter(m=>m.id!==id); save(); renderMatches(); updateStats();
+  try {
+    await apiRequest('matches', { method:'DELETE', id });
+    await loadAllData();
+    refreshCurrentView();
+    showToast('Match deleted');
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
 }
 
 function goLive(id) {
@@ -517,34 +686,55 @@ function openEditPlayer(id) {
   openModal('modal-add-player');
 }
 
-function savePlayer() {
+async function savePlayer() {
   const name=document.getElementById('f-pname').value.trim();
   const team=document.getElementById('f-pteam').value;
   const role=document.getElementById('f-prole').value;
   const jersey=parseInt(document.getElementById('f-pjersey').value)||0;
   const country=document.getElementById('f-pcountry').value.trim();
   if(!name||!team) return showToast('Name and team required','error');
-  if (editPlayerId) {
-    const p=players.find(x=>x.id===editPlayerId);
-    Object.assign(p,{name,team,role,jersey,country});
-    showToast('Player updated');
-  } else {
-    players.push({id:nextId(players),name,team,role,jersey,country,m:0,runs:0,wkts:0});
-    showToast(`${name} registered`);
+  try {
+    if (editPlayerId) {
+      await apiRequest('players', {
+        method:'PUT',
+        id:editPlayerId,
+        body:{ name, team_code:team, role, jersey_number:jersey || null, nationality:country }
+      });
+      showToast('Player updated');
+    } else {
+      await apiRequest('players', {
+        method:'POST',
+        body:{ name, team_code:team, role, jersey_number:jersey || null, nationality:country }
+      });
+      showToast(`${name} registered`);
+    }
+    await loadAllData();
+    refreshCurrentView();
+    closeModal('modal-add-player');
+    editPlayerId=null;
+  } catch (error) {
+    showToast(error.message, 'error');
   }
-  save(); renderPlayers(); updateStats(); closeModal('modal-add-player'); editPlayerId=null;
 }
 
-function deletePlayer(id) {
+async function deletePlayer(id) {
   if(!confirm('Remove player?')) return;
-  players=players.filter(p=>p.id!==id); save(); renderPlayers(); updateStats();
+  try {
+    await apiRequest('players', { method:'DELETE', id });
+    await loadAllData();
+    refreshCurrentView();
+    showToast('Player removed');
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
 }
 
-function bulkAddPlayers() {
+async function bulkAddPlayers() {
   const raw=document.getElementById('f-bulk').value.trim();
   if(!raw) return showToast('No data entered','error');
   const lines=raw.split('\n').filter(l=>l.trim());
-  let added=0, errs=0;
+  let errs=0;
+  const payload = [];
   lines.forEach((line,idx)=>{
     const parts=line.split(',').map(s=>s.trim());
     if(parts.length<2){errs++;return;}
@@ -555,12 +745,30 @@ function bulkAddPlayers() {
     const country=rest[2]||'';
     const teamCode=code.toUpperCase();
     if(!name||!teamCode){errs++;return;}
-    players.push({id:nextId(players),name,team:teamCode,role:validRole,jersey,country,m:0,runs:0,wkts:0});
-    added++;
+    payload.push({
+      name,
+      team_code:teamCode,
+      role:validRole,
+      jersey_number:jersey || null,
+      nationality:country
+    });
   });
-  save(); renderPlayers(); updateStats(); closeModal('modal-bulk-players');
-  document.getElementById('f-bulk').value='';
-  showToast(`${added} player${added!==1?'s':''} imported${errs?', '+errs+' skipped':''}`);
+  if (!payload.length) return showToast('No valid players found','error');
+  try {
+    const result = await apiRequest('players', {
+      method:'POST',
+      params:{ bulk:1 },
+      body:{ players:payload }
+    });
+    await loadAllData();
+    refreshCurrentView();
+    closeModal('modal-bulk-players');
+    document.getElementById('f-bulk').value='';
+    const added = Number(result?.added || payload.length);
+    showToast(`${added} player${added!==1?'s':''} imported${errs?', '+errs+' skipped':''}`);
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
 }
 
 // ─── STANDINGS ───────────────────────────────────────────────
@@ -712,7 +920,7 @@ function updateLiveTossTeams() {
   document.getElementById('f-livetoss').innerHTML=[m.t1,m.t2].map(c=>`<option value="${c}">${getTeamName(c)} (${c})</option>`).join('');
 }
 
-function startLiveMatch() {
+async function startLiveMatch() {
   const id=parseInt(document.getElementById('f-livematch').value);
   const toss=document.getElementById('f-livetoss').value;
   const choice=document.getElementById('f-livechoice').value;
@@ -739,11 +947,21 @@ function startLiveMatch() {
   if (batPlayers[1]) { inn.nonStriker=batPlayers[1].name; inn.batsmen[inn.nonStriker].status='not out'; }
   if (bowlPlayers[0]) inn.currentBowler=bowlPlayers[0].name;
 
-  // Mark match live
-  const mIdx=matches.findIndex(x=>x.id===id);
-  if(mIdx!==-1){matches[mIdx].status='live'; save();}
-  saveLive(); closeModal('modal-start-live'); renderLivePage();
-  showToast(`🏏 ${getTeamName(batFirst)} batting first! Max wickets: ${actualMaxW}`);
+  try {
+    await apiRequest('matches', {
+      method:'PUT',
+      id,
+      body:{ status:'live', score1:'', score2:'', scorecard:{ inn1:LS.innings[0], inn2:LS.innings[1] } }
+    });
+    const mIdx=matches.findIndex(x=>x.id===id);
+    if(mIdx!==-1){matches[mIdx].status='live';}
+    saveLive();
+    closeModal('modal-start-live');
+    renderLivePage();
+    showToast(`🏏 ${getTeamName(batFirst)} batting first! Max wickets: ${actualMaxW}`);
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
 }
 
 // ─── POPULATE SELECTS ────────────────────────────────────────
@@ -947,12 +1165,12 @@ function checkInningsEnd() {
       saveLive(); renderLivePage();
       showToast(`Innings break! Target: ${LS.innings[1].target} in ${LS.maxOvers} overs`,'warn');
     } else {
-      declareWinner();
+      void declareWinner();
     }
   }
 }
 
-function declareWinner() {
+async function declareWinner() {
   const inn1=LS.innings[0], inn2=LS.innings[1];
   let winner,summary;
   if(inn2&&inn2.runs>=(inn2.target||inn1.runs+1)){
@@ -983,7 +1201,7 @@ function declareWinner() {
   renderLivePage(); showToast(`🏆 Match over! ${summary}`);
 }
 
-function endLiveMatch() {
+async function endLiveMatch() {
   if(!confirm('Clear live match data?')) return;
   LS=JSON.parse(JSON.stringify(LS_DEF));
   saveLive();
@@ -1167,10 +1385,106 @@ function renderMatchSummary() {
 }
 
 // ─── INIT ────────────────────────────────────────────────────
-(function init() {
-  refreshGroupSelects();
-  renderDashboard();
-  updateStats();
+function queueLiveMatchSync() {
+  if(!LS.matchId || LS.status === 'completed') return;
+  clearTimeout(liveSyncTimer);
+  const inn1=LS.innings[0], inn2=LS.innings[1];
+  liveSyncTimer = setTimeout(async () => {
+    try {
+      await apiRequest('matches', {
+        method:'PUT',
+        id:LS.matchId,
+        body:{
+          status:LS.status === 'over_break' ? 'live' : LS.status,
+          score1:inn1?`${inn1.runs}/${inn1.wickets}`:'',
+          score2:inn2&&inn2.balls>0?`${inn2.runs}/${inn2.wickets}`:'',
+          scorecard:{inn1,inn2},
+        }
+      });
+    } catch (error) {
+      console.error(error);
+    }
+  }, 350);
+}
+
+async function declareWinner() {
+  const inn1=LS.innings[0], inn2=LS.innings[1];
+  let winner,summary;
+  if(inn2&&inn2.runs>=(inn2.target||inn1.runs+1)){
+    winner=inn2.batTeam;
+    summary=`${getTeamName(winner)} won by ${LS.maxWickets-inn2.wickets} wicket${LS.maxWickets-inn2.wickets!==1?'s':''}`;
+  } else {
+    winner=inn1.batTeam;
+    const margin=inn1.runs-(inn2?inn2.runs:0);
+    summary=`${getTeamName(winner)} won by ${margin} run${margin!==1?'s':''}`;
+  }
+  LS.status='completed';
+  saveLive();
+
+  try {
+    clearTimeout(liveSyncTimer);
+    await apiRequest('matches', {
+      method:'PUT',
+      id:LS.matchId,
+      params:{ result:1 },
+      body:{
+        score1:inn1?`${inn1.runs}/${inn1.wickets} (${oversStr(inn1.balls)})`:'-',
+        score2:inn2?`${inn2.runs}/${inn2.wickets} (${oversStr(inn2.balls)})`:'-',
+        winner_code:winner,
+        result_summary:summary,
+        player_of_match:'',
+        scorecard:{inn1,inn2},
+      }
+    });
+    await loadAllData();
+    document.getElementById('nav-live-badge').style.display='none';
+    renderLivePage();
+    showToast(`Match over! ${summary}`);
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
+}
+
+async function endLiveMatch() {
+  if(!confirm('Clear live match data?')) return;
+  const liveMatchId = LS.matchId;
+  const hadLiveMatch = matches.find(m=>m.id===liveMatchId)?.status === 'live';
+  LS=JSON.parse(JSON.stringify(LS_DEF));
+  saveLive();
+  clearTimeout(liveSyncTimer);
+  try {
+    if(liveMatchId && hadLiveMatch){
+      await apiRequest('matches', { method:'PUT', id:liveMatchId, body:{ status:'upcoming', score1:'', score2:'' } });
+      await loadAllData();
+    }
+    document.getElementById('nav-live-badge').style.display='none';
+    renderLivePage();
+    showToast('Live match ended');
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
+}
+
+function syncMatch() {
+  if(!LS.matchId) return;
+  const mIdx=matches.findIndex(m=>m.id===LS.matchId);
+  if(mIdx===-1) return;
+  const inn1=LS.innings[0],inn2=LS.innings[1];
+  matches[mIdx].status='live';
+  matches[mIdx].s1=inn1?`${inn1.runs}/${inn1.wickets}`:'';
+  matches[mIdx].s2=inn2&&inn2.balls>0?`${inn2.runs}/${inn2.wickets}`:'';
+  queueLiveMatchSync();
+  if(document.getElementById('page-dashboard').classList.contains('active')) renderDashboard();
+}
+
+(async function init() {
+  try {
+    await loadAllData();
+  } catch (error) {
+    console.error(error);
+    showToast(error.message, 'error');
+  }
+  refreshCurrentView();
   if(LS.status!=='idle') {
     document.getElementById('nav-live-badge').style.display='inline-flex';
   }

@@ -45,9 +45,23 @@ function handleGroups(string $m, ?int $id): void {
             respond(['id' => (int)$db->lastInsertId(), 'message' => 'Group created'], 201);
         case 'DELETE':
             if (!$id) respond(['error' => 'id required'], 422);
-            $db->prepare("UPDATE teams SET group_name=NULL WHERE group_id=:id")->execute(['id'=>$id]);
-            $db->prepare("DELETE FROM groups WHERE id=:id")->execute(['id'=>$id]);
-            respond(['message' => 'Group deleted']);
+            try {
+                $db->beginTransaction();
+                // Get group name
+                $stmt = $db->prepare("SELECT name FROM groups WHERE id=:id");
+                $stmt->execute(['id'=>$id]);
+                $group = $stmt->fetch();
+                if (!$group) respond(['error'=>'Group not found'],404);
+                // Unassign teams
+                $db->prepare("UPDATE teams SET group_name=NULL WHERE group_name=:name")->execute(['name'=>$group['name']]);
+                // Delete group
+                $db->prepare("DELETE FROM groups WHERE id=:id")->execute(['id'=>$id]);
+                $db->commit();
+                respond(['message' => 'Group deleted']);
+            } catch(Exception $e) {
+                $db->rollBack();
+                respond(['error'=>$e->getMessage()],500);
+            }
         default: respond(['error' => 'Method not allowed'], 405);
     }
 }
@@ -80,8 +94,25 @@ function handleTeams(string $m, ?int $id): void {
 
         case 'DELETE':
             if (!$id) respond(['error'=>'id required'],422);
-            $db->prepare("DELETE FROM teams WHERE id=:id")->execute(['id'=>$id]);
-            respond(['message'=>'Team deleted']);
+            try {
+                $db->beginTransaction();
+                // Get team code first
+                $stmt = $db->prepare("SELECT code FROM teams WHERE id=:id");
+                $stmt->execute(['id'=>$id]);
+                $team = $stmt->fetch();
+                if (!$team) respond(['error'=>'Team not found'],404);
+                // Delete players first
+                $db->prepare("DELETE FROM players WHERE team_code=:c")->execute(['c'=>$team['code']]);
+                // Delete matches
+                $db->prepare("DELETE FROM matches WHERE team1_code=:c OR team2_code=:c")->execute(['c'=>$team['code']]);
+                // Delete team
+                $db->prepare("DELETE FROM teams WHERE id=:id")->execute(['id'=>$id]);
+                $db->commit();
+                respond(['message'=>'Team deleted']);
+            } catch(Exception $e) {
+                $db->rollBack();
+                respond(['error'=>$e->getMessage()],500);
+            }
 
         default: respond(['error'=>'Method not allowed'],405);
     }
@@ -131,8 +162,12 @@ function handlePlayers(string $m, ?int $id): void {
 
         case 'DELETE':
             if(!$id) respond(['error'=>'id required'],422);
-            $db->prepare("DELETE FROM players WHERE id=:id")->execute(['id'=>$id]);
-            respond(['message'=>'Player removed']);
+            try {
+                $db->prepare("DELETE FROM players WHERE id=:id")->execute(['id'=>$id]);
+                respond(['message'=>'Player removed']);
+            } catch(Exception $e) {
+                respond(['error'=>$e->getMessage()],500);
+            }
 
         default: respond(['error'=>'Method not allowed'],405);
     }
@@ -182,8 +217,18 @@ function handleMatches(string $m, ?int $id): void {
 
         case 'DELETE':
             if(!$id) respond(['error'=>'id required'],422);
-            $db->prepare("DELETE FROM matches WHERE id=:id")->execute(['id'=>$id]);
-            respond(['message'=>'Match deleted']);
+            try {
+                $db->beginTransaction();
+                // Delete scorecard first
+                $db->prepare("DELETE FROM match_scorecard WHERE match_id=:id")->execute(['id'=>$id]);
+                // Delete match
+                $db->prepare("DELETE FROM matches WHERE id=:id")->execute(['id'=>$id]);
+                $db->commit();
+                respond(['message'=>'Match deleted']);
+            } catch(Exception $e) {
+                $db->rollBack();
+                respond(['error'=>$e->getMessage()],500);
+            }
 
         default: respond(['error'=>'Method not allowed'],405);
     }

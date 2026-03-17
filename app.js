@@ -673,7 +673,15 @@ function populatePlayerTeamSel() {
   document.getElementById('f-pteam').innerHTML = teams.map(t=>`<option value="${t.code}">${t.name} (${t.code})</option>`).join('');
 }
 
-function openAddPlayer() { editPlayerId=null; document.getElementById('player-modal-title').textContent='Register Player'; document.getElementById('player-modal-btn').textContent='Register'; populatePlayerTeamSel(); ['f-pname','f-pjersey','f-pcountry'].forEach(id=>document.getElementById(id).value=''); openModal('modal-add-player'); }
+function openAddPlayer() {
+  editPlayerId=null;
+  document.getElementById('player-modal-title').textContent='Register Player';
+  document.getElementById('player-modal-btn').textContent='Register';
+  populatePlayerTeamSel();
+  ['f-pname','f-pjersey','f-pcountry','f-pmatches','f-pruns','f-pwickets'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f-prole').value='batsman';
+  openModal('modal-add-player');
+}
 function openEditPlayer(id) {
   const p=players.find(x=>x.id===id); if(!p) return;
   editPlayerId=id;
@@ -683,6 +691,9 @@ function openEditPlayer(id) {
   document.getElementById('f-pname').value=p.name; document.getElementById('f-pteam').value=p.team;
   document.getElementById('f-prole').value=p.role; document.getElementById('f-pjersey').value=p.jersey||'';
   document.getElementById('f-pcountry').value=p.country||'';
+  document.getElementById('f-pmatches').value=p.m||0;
+  document.getElementById('f-pruns').value=p.runs||0;
+  document.getElementById('f-pwickets').value=p.wkts||0;
   openModal('modal-add-player');
 }
 
@@ -692,19 +703,40 @@ async function savePlayer() {
   const role=document.getElementById('f-prole').value;
   const jersey=parseInt(document.getElementById('f-pjersey').value)||0;
   const country=document.getElementById('f-pcountry').value.trim();
+  const matchesPlayed=parseInt(document.getElementById('f-pmatches').value)||0;
+  const totalRuns=parseInt(document.getElementById('f-pruns').value)||0;
+  const totalWickets=parseInt(document.getElementById('f-pwickets').value)||0;
   if(!name||!team) return showToast('Name and team required','error');
   try {
     if (editPlayerId) {
       await apiRequest('players', {
         method:'PUT',
         id:editPlayerId,
-        body:{ name, team_code:team, role, jersey_number:jersey || null, nationality:country }
+        body:{
+          name,
+          team_code:team,
+          role,
+          jersey_number:jersey || null,
+          nationality:country,
+          matches_played:matchesPlayed,
+          total_runs:totalRuns,
+          total_wickets:totalWickets
+        }
       });
       showToast('Player updated');
     } else {
       await apiRequest('players', {
         method:'POST',
-        body:{ name, team_code:team, role, jersey_number:jersey || null, nationality:country }
+        body:{
+          name,
+          team_code:team,
+          role,
+          jersey_number:jersey || null,
+          nationality:country,
+          matches_played:matchesPlayed,
+          total_runs:totalRuns,
+          total_wickets:totalWickets
+        }
       });
       showToast(`${name} registered`);
     }

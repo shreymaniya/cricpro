@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>CricketPro — Tournament Manager</title>
+  <title>Vidhvan — Tournament Manager</title>
   <link rel="stylesheet" href="styles.css"/>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
@@ -13,7 +13,7 @@
 <aside class="sidebar" id="sidebar">
   <div class="brand">
     <div class="brand-icon">🏏</div>
-    <div><span class="brand-name">CricketPro</span><span class="brand-sub">Tournament Manager</span></div>
+    <div><span class="brand-name">Vidhvan</span><span class="brand-sub">Tournament Manager</span></div>
   </div>
   <nav class="nav-menu">
     <a class="nav-item active" data-page="dashboard"><i class="fas fa-chart-line"></i><span>Dashboard</span></a>
@@ -25,7 +25,7 @@
     <a class="nav-item nav-live" data-page="livescore"><i class="fas fa-broadcast-tower"></i><span>Live Score</span><span class="nav-live-badge" id="nav-live-badge" style="display:none">LIVE</span></a>
   </nav>
   <div class="sidebar-footer">
-    <div class="tournament-badge"><span class="dot"></span><span id="t-name-side">IPL 2025</span></div>
+    <div class="tournament-badge"><span class="dot"></span><span id="t-name-side">Vidhvan Tournament</span></div>
   </div>
 </aside>
 
@@ -396,6 +396,11 @@
         <div class="form-group"><label>Jersey No.</label><input type="number" id="f-pjersey" class="form-input" placeholder="e.g. 7"/></div>
         <div class="form-group"><label>Country</label><input type="text" id="f-pcountry" class="form-input" placeholder="e.g. India"/></div>
       </div>
+      <div class="form-row">
+        <div class="form-group"><label>Matches Played</label><input type="number" id="f-pmatches" class="form-input" placeholder="0" min="0"/></div>
+        <div class="form-group"><label>Total Runs</label><input type="number" id="f-pruns" class="form-input" placeholder="0" min="0"/></div>
+      </div>
+      <div class="form-group"><label>Total Wickets</label><input type="number" id="f-pwickets" class="form-input" placeholder="0" min="0"/></div>
     </div>
     <div class="modal-foot"><button class="btn-ghost" onclick="closeModal('modal-add-player')">Cancel</button><button class="btn-primary" id="player-modal-btn" onclick="savePlayer()">Register</button></div>
   </div>

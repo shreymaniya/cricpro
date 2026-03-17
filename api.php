@@ -160,11 +160,20 @@ function handlePlayers(string $m, ?int $id): void {
     if ($m === 'POST' && isset($_GET['bulk'])) {
         $b = getBody();
         if (empty($b['players']) || !is_array($b['players'])) respond(['error'=>'players array required'],422);
-        $stmt = $db->prepare("INSERT INTO players (name,team_code,role,jersey_number,nationality) VALUES (:n,:t,:r,:j,:c)");
+        $stmt = $db->prepare("INSERT INTO players (name,team_code,role,jersey_number,nationality,matches_played,total_runs,total_wickets) VALUES (:n,:t,:r,:j,:c,:m,:ru,:w)");
         $added = 0;
         foreach ($b['players'] as $p) {
             if (empty($p['name']) || empty($p['team_code'])) continue;
-            $stmt->execute(['n'=>$p['name'],'t'=>strtoupper($p['team_code']),'r'=>$p['role']??'batsman','j'=>$p['jersey_number']??null,'c'=>$p['nationality']??'']);
+            $stmt->execute([
+                'n'=>$p['name'],
+                't'=>strtoupper($p['team_code']),
+                'r'=>$p['role']??'batsman',
+                'j'=>$p['jersey_number']??null,
+                'c'=>$p['nationality']??'',
+                'm'=>(int)($p['matches_played'] ?? 0),
+                'ru'=>(int)($p['total_runs'] ?? 0),
+                'w'=>(int)($p['total_wickets'] ?? 0)
+            ]);
             $added++;
         }
         respond(['added' => $added, 'message' => "$added players imported"], 201);
@@ -181,8 +190,17 @@ function handlePlayers(string $m, ?int $id): void {
         case 'POST':
             $b=getBody();
             if(empty($b['name'])||empty($b['team_code'])) respond(['error'=>'name and team_code required'],422);
-            $db->prepare("INSERT INTO players (name,team_code,role,jersey_number,nationality) VALUES(:n,:t,:r,:j,:c)")
-               ->execute(['n'=>$b['name'],'t'=>strtoupper($b['team_code']),'r'=>$b['role']??'batsman','j'=>$b['jersey_number']??null,'c'=>$b['nationality']??'']);
+            $db->prepare("INSERT INTO players (name,team_code,role,jersey_number,nationality,matches_played,total_runs,total_wickets) VALUES(:n,:t,:r,:j,:c,:m,:ru,:w)")
+               ->execute([
+                   'n'=>$b['name'],
+                   't'=>strtoupper($b['team_code']),
+                   'r'=>$b['role']??'batsman',
+                   'j'=>$b['jersey_number']??null,
+                   'c'=>$b['nationality']??'',
+                   'm'=>(int)($b['matches_played'] ?? 0),
+                   'ru'=>(int)($b['total_runs'] ?? 0),
+                   'w'=>(int)($b['total_wickets'] ?? 0)
+                ]);
             respond(['id'=>(int)$db->lastInsertId(),'message'=>'Player registered'],201);
 
         case 'PUT':

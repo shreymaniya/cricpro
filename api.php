@@ -45,23 +45,9 @@ function handleGroups(string $m, ?int $id): void {
             respond(['id' => (int)$db->lastInsertId(), 'message' => 'Group created'], 201);
         case 'DELETE':
             if (!$id) respond(['error' => 'id required'], 422);
-            try {
-                $db->beginTransaction();
-                // Get group name
-                $stmt = $db->prepare("SELECT name FROM groups WHERE id=:id");
-                $stmt->execute(['id'=>$id]);
-                $group = $stmt->fetch();
-                if (!$group) respond(['error'=>'Group not found'],404);
-                // Unassign teams
-                $db->prepare("UPDATE teams SET group_name=NULL WHERE group_name=:name")->execute(['name'=>$group['name']]);
-                // Delete group
-                $db->prepare("DELETE FROM groups WHERE id=:id")->execute(['id'=>$id]);
-                $db->commit();
-                respond(['message' => 'Group deleted']);
-            } catch(Exception $e) {
-                $db->rollBack();
-                respond(['error'=>$e->getMessage()],500);
-            }
+            $db->prepare("UPDATE teams SET group_name=NULL WHERE group_id=:id")->execute(['id'=>$id]);
+            $db->prepare("DELETE FROM groups WHERE id=:id")->execute(['id'=>$id]);
+            respond(['message' => 'Group deleted']);
         default: respond(['error' => 'Method not allowed'], 405);
     }
 }
@@ -88,64 +74,14 @@ function handleTeams(string $m, ?int $id): void {
         case 'PUT':
             if (!$id) respond(['error'=>'id required'],422);
             $b = getBody();
-            try {
-                $db->beginTransaction();
-                $stmt = $db->prepare("SELECT code FROM teams WHERE id=:id");
-                $stmt->execute(['id'=>$id]);
-                $team = $stmt->fetch();
-                if (!$team) throw new Exception('Team not found', 404);
-
-                $oldCode = $team['code'];
-                $newCode = !empty($b['code']) ? strtoupper($b['code']) : $oldCode;
-
-                if ($newCode !== $oldCode) {
-                    $dup = $db->prepare("SELECT id FROM teams WHERE code=:code AND id<>:id");
-                    $dup->execute(['code'=>$newCode, 'id'=>$id]);
-                    if ($dup->fetch()) throw new Exception('Team code already exists', 422);
-                    $db->exec("SET FOREIGN_KEY_CHECKS=0");
-                }
-
-                $db->prepare("UPDATE teams SET code=:code,name=COALESCE(:n,name),color=COALESCE(:col,color),group_name=COALESCE(:g,group_name),captain=COALESCE(:cap,captain),home_ground=COALESCE(:gr,home_ground) WHERE id=:id")
-                   ->execute(['code'=>$newCode,'n'=>$b['name']??null,'col'=>$b['color']??null,'g'=>$b['group_name']??null,'cap'=>$b['captain']??null,'gr'=>$b['ground']??null,'id'=>$id]);
-
-                if ($newCode !== $oldCode) {
-                    $db->prepare("UPDATE players SET team_code=:new WHERE team_code=:old")->execute(['new'=>$newCode, 'old'=>$oldCode]);
-                    $db->prepare("UPDATE matches SET team1_code=:new WHERE team1_code=:old")->execute(['new'=>$newCode, 'old'=>$oldCode]);
-                    $db->prepare("UPDATE matches SET team2_code=:new WHERE team2_code=:old")->execute(['new'=>$newCode, 'old'=>$oldCode]);
-                    $db->prepare("UPDATE matches SET winner_code=:new WHERE winner_code=:old")->execute(['new'=>$newCode, 'old'=>$oldCode]);
-                    $db->exec("SET FOREIGN_KEY_CHECKS=1");
-                }
-
-                $db->commit();
-                respond(['message'=>'Team updated']);
-            } catch(Exception $e) {
-                try { $db->exec("SET FOREIGN_KEY_CHECKS=1"); } catch(Exception $ignored) {}
-                if ($db->inTransaction()) $db->rollBack();
-                $code = $e->getCode();
-                respond(['error'=>$e->getMessage()], ($code >= 400 && $code < 600) ? $code : 500);
-            }
+            $db->prepare("UPDATE teams SET name=COALESCE(:n,name),color=COALESCE(:col,color),group_name=COALESCE(:g,group_name),captain=COALESCE(:cap,captain),home_ground=COALESCE(:gr,home_ground) WHERE id=:id")
+               ->execute(['n'=>$b['name']??null,'col'=>$b['color']??null,'g'=>$b['group_name']??null,'cap'=>$b['captain']??null,'gr'=>$b['ground']??null,'id'=>$id]);
+            respond(['message'=>'Team updated']);
 
         case 'DELETE':
             if (!$id) respond(['error'=>'id required'],422);
-            try {
-                $db->beginTransaction();
-                // Get team code first
-                $stmt = $db->prepare("SELECT code FROM teams WHERE id=:id");
-                $stmt->execute(['id'=>$id]);
-                $team = $stmt->fetch();
-                if (!$team) respond(['error'=>'Team not found'],404);
-                // Delete players first
-                $db->prepare("DELETE FROM players WHERE team_code=:c")->execute(['c'=>$team['code']]);
-                // Delete matches
-                $db->prepare("DELETE FROM matches WHERE team1_code=:c OR team2_code=:c")->execute(['c'=>$team['code']]);
-                // Delete team
-                $db->prepare("DELETE FROM teams WHERE id=:id")->execute(['id'=>$id]);
-                $db->commit();
-                respond(['message'=>'Team deleted']);
-            } catch(Exception $e) {
-                $db->rollBack();
-                respond(['error'=>$e->getMessage()],500);
-            }
+            $db->prepare("DELETE FROM teams WHERE id=:id")->execute(['id'=>$id]);
+            respond(['message'=>'Team deleted']);
 
         default: respond(['error'=>'Method not allowed'],405);
     }
@@ -195,12 +131,8 @@ function handlePlayers(string $m, ?int $id): void {
 
         case 'DELETE':
             if(!$id) respond(['error'=>'id required'],422);
-            try {
-                $db->prepare("DELETE FROM players WHERE id=:id")->execute(['id'=>$id]);
-                respond(['message'=>'Player removed']);
-            } catch(Exception $e) {
-                respond(['error'=>$e->getMessage()],500);
-            }
+            $db->prepare("DELETE FROM players WHERE id=:id")->execute(['id'=>$id]);
+            respond(['message'=>'Player removed']);
 
         default: respond(['error'=>'Method not allowed'],405);
     }
@@ -250,18 +182,8 @@ function handleMatches(string $m, ?int $id): void {
 
         case 'DELETE':
             if(!$id) respond(['error'=>'id required'],422);
-            try {
-                $db->beginTransaction();
-                // Delete scorecard first
-                $db->prepare("DELETE FROM match_scorecard WHERE match_id=:id")->execute(['id'=>$id]);
-                // Delete match
-                $db->prepare("DELETE FROM matches WHERE id=:id")->execute(['id'=>$id]);
-                $db->commit();
-                respond(['message'=>'Match deleted']);
-            } catch(Exception $e) {
-                $db->rollBack();
-                respond(['error'=>$e->getMessage()],500);
-            }
+            $db->prepare("DELETE FROM matches WHERE id=:id")->execute(['id'=>$id]);
+            respond(['message'=>'Match deleted']);
 
         default: respond(['error'=>'Method not allowed'],405);
     }

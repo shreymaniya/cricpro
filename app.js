@@ -4,86 +4,73 @@
              bulk players, auto-wickets from squad, custom overs
    ============================================================ */
 
+// ─── DEFAULT DATA ────────────────────────────────────────────
+const D_GROUPS = [
+  { id:1, name:'Group A', stage:'group' },
+  { id:2, name:'Group B', stage:'group' },
+];
+
+const D_TEAMS = [
+  { id:1, name:'Mumbai Indians',       code:'MI',  color:'#004ba0', group:'Group A', ground:'Wankhede Stadium',        captain:'Rohit Sharma',   played:6, won:4, lost:2, nr:0 },
+  { id:2, name:'Chennai Super Kings',  code:'CSK', color:'#f7a600', group:'Group A', ground:'Chepauk, Chennai',        captain:'MS Dhoni',        played:6, won:3, lost:3, nr:0 },
+  { id:3, name:'Royal Challengers',    code:'RCB', color:'#c40000', group:'Group A', ground:'Chinnaswamy Stadium',     captain:'Virat Kohli',     played:6, won:3, lost:3, nr:0 },
+  { id:4, name:'Kolkata Knight Riders',code:'KKR', color:'#3a225d', group:'Group B', ground:'Eden Gardens',            captain:'Shreyas Iyer',   played:6, won:4, lost:2, nr:0 },
+  { id:5, name:'Delhi Capitals',       code:'DC',  color:'#005da0', group:'Group B', ground:'Arun Jaitley Stadium',   captain:'David Warner',   played:6, won:2, lost:4, nr:0 },
+  { id:6, name:'Rajasthan Royals',     code:'RR',  color:'#e01e5a', group:'Group B', ground:'Sawai Mansingh Stadium', captain:'Sanju Samson',   played:6, won:3, lost:3, nr:0 },
+];
+
+const D_PLAYERS = [
+  { id:1,  name:'Rohit Sharma',     team:'MI',  role:'batsman',      jersey:45, country:'India',     m:6, runs:312, wkts:0  },
+  { id:2,  name:'Jasprit Bumrah',   team:'MI',  role:'bowler',       jersey:93, country:'India',     m:6, runs:18,  wkts:11 },
+  { id:3,  name:'Suryakumar Yadav', team:'MI',  role:'batsman',      jersey:73, country:'India',     m:6, runs:280, wkts:0  },
+  { id:4,  name:'Hardik Pandya',    team:'MI',  role:'allrounder',   jersey:28, country:'India',     m:6, runs:180, wkts:6  },
+  { id:5,  name:'Ishan Kishan',     team:'MI',  role:'wicketkeeper', jersey:32, country:'India',     m:6, runs:210, wkts:0  },
+  { id:6,  name:'MS Dhoni',         team:'CSK', role:'wicketkeeper', jersey:7,  country:'India',     m:6, runs:175, wkts:0  },
+  { id:7,  name:'Ravindra Jadeja',  team:'CSK', role:'allrounder',   jersey:8,  country:'India',     m:6, runs:148, wkts:8  },
+  { id:8,  name:'Deepak Chahar',    team:'CSK', role:'bowler',       jersey:90, country:'India',     m:6, runs:22,  wkts:9  },
+  { id:9,  name:'Devon Conway',     team:'CSK', role:'batsman',      jersey:19, country:'NZ',        m:6, runs:260, wkts:0  },
+  { id:10, name:'Virat Kohli',      team:'RCB', role:'batsman',      jersey:18, country:'India',     m:6, runs:380, wkts:0  },
+  { id:11, name:'Glenn Maxwell',    team:'RCB', role:'allrounder',   jersey:32, country:'Australia', m:6, runs:195, wkts:4  },
+  { id:12, name:'Mohammed Siraj',   team:'RCB', role:'bowler',       jersey:73, country:'India',     m:6, runs:14,  wkts:10 },
+  { id:13, name:'Shreyas Iyer',     team:'KKR', role:'batsman',      jersey:41, country:'India',     m:6, runs:290, wkts:0  },
+  { id:14, name:'Andre Russell',    team:'KKR', role:'allrounder',   jersey:12, country:'WI',        m:6, runs:210, wkts:7  },
+  { id:15, name:'Sanju Samson',     team:'RR',  role:'wicketkeeper', jersey:9,  country:'India',     m:6, runs:295, wkts:0  },
+  { id:16, name:'David Warner',     team:'DC',  role:'batsman',      jersey:31, country:'Australia', m:6, runs:240, wkts:0  },
+];
+
+const D_MATCHES = [
+  { id:1,  t1:'MI',  t2:'CSK', date:'2025-03-22', venue:'Wankhede Stadium',       type:'league', overs:20, maxW:10, status:'completed', s1:'187/5 (20)',  s2:'172/8 (20)',  winner:'MI',  summary:'MI won by 15 runs',          potm:'Rohit Sharma',  scorecard:null },
+  { id:2,  t1:'RCB', t2:'KKR', date:'2025-03-23', venue:'Chinnaswamy Stadium',    type:'league', overs:20, maxW:10, status:'completed', s1:'204/4 (20)',  s2:'207/6 (19.3)',winner:'KKR', summary:'KKR won by 4 wickets',       potm:'Andre Russell', scorecard:null },
+  { id:3,  t1:'RR',  t2:'DC',  date:'2025-03-24', venue:'Sawai Mansingh Stadium', type:'league', overs:20, maxW:10, status:'completed', s1:'165/8 (20)',  s2:'158/9 (20)',  winner:'RR',  summary:'RR won by 7 runs',           potm:'Sanju Samson',  scorecard:null },
+  { id:4,  t1:'MI',  t2:'RCB', date:'2025-03-29', venue:'Wankhede Stadium',       type:'league', overs:20, maxW:10, status:'upcoming',  s1:'',            s2:'',            winner:null,  summary:'',                           potm:'',              scorecard:null },
+  { id:5,  t1:'CSK', t2:'KKR', date:'2025-03-30', venue:'Chepauk, Chennai',       type:'league', overs:20, maxW:10, status:'upcoming',  s1:'',            s2:'',            winner:null,  summary:'',                           potm:'',              scorecard:null },
+  { id:6,  t1:'MI',  t2:'KKR', date:'2025-04-15', venue:'Wankhede Stadium',       type:'semi',   overs:20, maxW:10, status:'upcoming',  s1:'',            s2:'',            winner:null,  summary:'',                           potm:'',              scorecard:null },
+];
+
 // ─── STATE ───────────────────────────────────────────────────
-let groups  = [];
-let teams   = [];
-let players = [];
-let matches = [];
+let groups  = JSON.parse(localStorage.getItem('cp_groups'))  || D_GROUPS;
+let teams   = JSON.parse(localStorage.getItem('cp_teams'))   || D_TEAMS;
+let players = JSON.parse(localStorage.getItem('cp_players')) || D_PLAYERS;
+let matches = JSON.parse(localStorage.getItem('cp_matches')) || D_MATCHES;
 let editTeamId   = null;
 let editPlayerId = null;
 let matchFilter  = 'all';
 let playerFilter = 'all';
 let teamGroupFilter = 'all';
 
-// API Base URL
-const API = 'api.php';
-
-// ─── API FETCH HELPERS ───────────────────────────────────────
-async function apiCall(resource, method='GET', body=null, params='') {
-  try {
-    const url = `${API}?resource=${resource}${params}`;
-    const options = { method, headers: {'Content-Type': 'application/json'} };
-    if (body) options.body = JSON.stringify(body);
-    const res = await fetch(url, options);
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || `HTTP ${res.status}`);
-    }
-    return await res.json();
-  } catch (e) {
-    showToast(`API Error: ${e.message}`, 'error');
-    console.error(e);
-    return null;
-  }
-}
-
-// Load all data from database on page load
-async function loadAllData() {
-  const [g, t, p, m] = await Promise.all([
-    apiCall('groups'),
-    apiCall('teams'),
-    apiCall('players'),
-    apiCall('matches'),
-  ]);
-  if (g) groups = g;
-  if (t) teams = t;
-  if (p) players = p;
-  if (m) matches = m;
-  renderPage('dashboard');
-}
-
-async function refreshTeamsAndMatches() {
-  const [t, m] = await Promise.all([
-    apiCall('teams'),
-    apiCall('matches'),
-  ]);
-  if (t) teams = t;
-  if (m) matches = m;
-}
-
-async function refreshPlayersData() {
-  const p = await apiCall('players');
-  if (p) players = p;
+function save() {
+  localStorage.setItem('cp_groups',  JSON.stringify(groups));
+  localStorage.setItem('cp_teams',   JSON.stringify(teams));
+  localStorage.setItem('cp_players', JSON.stringify(players));
+  localStorage.setItem('cp_matches', JSON.stringify(matches));
 }
 
 // ─── HELPERS ─────────────────────────────────────────────────
 function getTeam(code)     { return teams.find(t => t.code === code); }
 function getTeamName(code) { const t=getTeam(code); return t ? t.name : code; }
 function getTeamColor(code){ const t=getTeam(code); return t ? t.color : '#555'; }
-function teamPlayers(code) { return players.filter(p => p.team_code === code); }
+function teamPlayers(code) { return players.filter(p => p.team === code); }
 function nextId(arr)       { return arr.length ? Math.max(...arr.map(x=>x.id))+1 : 1; }
-function getActivePage()   { const p=document.querySelector('.page.active'); return p ? p.id.replace('page-','') : 'dashboard'; }
-function rerenderActivePage() { renderPage(getActivePage()); }
-
-function getMatchScorecard(match) {
-  if (match.scorecard) return match.scorecard;
-  if (!match.scorecard_json) return null;
-  try {
-    return JSON.parse(match.scorecard_json);
-  } catch {
-    return null;
-  }
-}
 
 function fmtDate(d) {
   if (!d) return '';
@@ -154,12 +141,12 @@ function renderDashboard() {
   const liveM = matches.find(m => m.status === 'live');
   const liveBody = document.getElementById('dash-live-body');
   if (liveM) {
-    const t1 = getTeam(liveM.team1_code), t2 = getTeam(liveM.team2_code);
+    const t1 = getTeam(liveM.t1), t2 = getTeam(liveM.t2);
     liveBody.innerHTML = `
       <div class="live-match-display" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0">
-        <div style="text-align:center;flex:1">${ta(liveM.team1_code,46)}<div style="font-size:.78rem;color:var(--muted);margin-top:6px">${getTeamName(liveM.team1_code)}</div><div style="font-family:var(--font-h);font-size:1.8rem;margin-top:4px">${liveM.score1||'0/0'}</div></div>
+        <div style="text-align:center;flex:1">${ta(liveM.t1,46)}<div style="font-size:.78rem;color:var(--muted);margin-top:6px">${getTeamName(liveM.t1)}</div><div style="font-family:var(--font-h);font-size:1.8rem;margin-top:4px">${liveM.s1||'0/0'}</div></div>
         <div style="font-family:var(--font-h);font-size:1.2rem;color:var(--accent)">VS</div>
-        <div style="text-align:center;flex:1">${ta(liveM.team2_code,46)}<div style="font-size:.78rem;color:var(--muted);margin-top:6px">${getTeamName(liveM.team2_code)}</div><div style="font-family:var(--font-h);font-size:1.8rem;margin-top:4px">${liveM.score2||'—'}</div></div>
+        <div style="text-align:center;flex:1">${ta(liveM.t2,46)}<div style="font-size:.78rem;color:var(--muted);margin-top:6px">${getTeamName(liveM.t2)}</div><div style="font-family:var(--font-h);font-size:1.8rem;margin-top:4px">${liveM.s2||'—'}</div></div>
       </div>`;
   } else {
     liveBody.innerHTML = `<div class="empty-state"><i class="fas fa-broadcast-tower"></i><p>No live match</p></div>`;
@@ -170,8 +157,8 @@ function renderDashboard() {
   document.getElementById('dash-recent').innerHTML = recent.length
     ? recent.map(m=>`
       <div class="result-row">
-        <div class="result-teams">${ta(m.team1_code,24)} <span>${getTeamName(m.team1_code)}</span> <span style="color:var(--muted)">vs</span> ${ta(m.team2_code,24)} <span>${getTeamName(m.team2_code)}</span></div>
-        <div><div class="result-win">${m.winner_code?getTeamName(m.winner_code)+' won':''}</div><div class="result-date">${fmtDate(m.match_date)}</div></div>
+        <div class="result-teams">${ta(m.t1,24)} <span>${getTeamName(m.t1)}</span> <span style="color:var(--muted)">vs</span> ${ta(m.t2,24)} <span>${getTeamName(m.t2)}</span></div>
+        <div><div class="result-win">${m.winner?getTeamName(m.winner)+' won':''}</div><div class="result-date">${fmtDate(m.date)}</div></div>
       </div>`).join('')
     : '<div class="empty-state" style="padding:20px"><p>No results yet</p></div>';
 
@@ -191,12 +178,12 @@ function renderDashboard() {
 function calcNRR(teamCode) {
   let runsScored=0, oversFaced=0, runsConceded=0, oversBowled=0;
   matches.filter(m=>m.status==='completed').forEach(m=>{
-    const sc = getMatchScorecard(m);
-    if (!sc) return;
-    if (m.team1_code===teamCode && sc.inn1) {
+    if (!m.scorecard) return;
+    const sc = m.scorecard;
+    if (m.t1===teamCode && sc.inn1) {
       runsScored  += sc.inn1.runs;  oversFaced   += sc.inn1.balls/6;
       runsConceded+= sc.inn2 ? sc.inn2.runs : 0; oversBowled += sc.inn2 ? sc.inn2.balls/6 : 0;
-    } else if (m.team2_code===teamCode && sc.inn2) {
+    } else if (m.t2===teamCode && sc.inn2) {
       runsScored  += sc.inn2.runs;  oversFaced   += sc.inn2.balls/6;
       runsConceded+= sc.inn1 ? sc.inn1.runs : 0; oversBowled += sc.inn1 ? sc.inn1.balls/6 : 0;
     }
@@ -210,18 +197,18 @@ function calcNRR(teamCode) {
 
 function calcStandings(groupFilter) {
   let t = teams.slice();
-  if (groupFilter) t = t.filter(x=>x.group_name===groupFilter);
+  if (groupFilter) t = t.filter(x=>x.group===groupFilter);
   return t.map(tm=>({
     ...tm,
-    pts: tm.won*2 + (tm.nr||0),
-    nrr: (tm.nrr||0).toFixed(3),
+    pts: tm.won*2 + tm.nr,
+    nrr: calcNRR(tm.code),
     form: getForm(tm.code),
   })).sort((a,b)=> b.pts-a.pts || parseFloat(b.nrr)-parseFloat(a.nrr));
 }
 
 function getForm(code) {
-  return matches.filter(m=>m.status==='completed'&&(m.team1_code===code||m.team2_code===code))
-    .slice(-5).map(m=>m.winner_code===code?'W':'L');
+  return matches.filter(m=>m.status==='completed'&&(m.t1===code||m.t2===code))
+    .slice(-5).map(m=>m.winner===code?'W':'L');
 }
 
 // ─── GROUPS ──────────────────────────────────────────────────
@@ -232,7 +219,7 @@ function renderGroups() {
     return;
   }
   grid.innerHTML = groups.map(g => {
-    const gTeams = teams.filter(t => t.group_name === g.name);
+    const gTeams = teams.filter(t => t.group === g.name);
     return `<div class="group-card">
       <div class="group-header" style="background:linear-gradient(135deg,rgba(163,230,53,.1),rgba(163,230,53,.03))">
         <div><div class="group-name">${g.name}</div><div class="group-stage">${g.stage} stage</div></div>
@@ -253,30 +240,18 @@ function addGroup() {
   const stage = document.getElementById('f-gstage').value;
   if (!name) return showToast('Group name required','error');
   if (groups.find(g=>g.name===name)) return showToast('Group already exists','error');
-  
-  apiCall('groups', 'POST', {name, stage}).then(res => {
-    if (res) {
-      groups.push({id: res.id, name, stage});
-      refreshGroupSelects();
-      renderGroups();
-      closeModal('modal-add-group');
-      document.getElementById('f-gname').value='';
-      showToast(`${name} created`);
-    }
-  });
+  groups.push({ id:nextId(groups), name, stage });
+  save(); refreshGroupSelects(); renderGroups(); closeModal('modal-add-group');
+  document.getElementById('f-gname').value='';
+  showToast(`${name} created`);
 }
 
 function deleteGroup(id) {
   if (!confirm('Delete this group? Teams will be unassigned.')) return;
   const g = groups.find(x=>x.id===id);
-  if (!g) return;
-  
-  apiCall('groups', 'DELETE', null, `&id=${id}`).then(res => {
-    groups = groups.filter(x=>x.id!==id);
-    renderPage('dashboard');
-    updateStats();
-    showToast('Group deleted');
-  }).catch(e => showToast(`Delete failed: ${e.message}`, 'error'));
+  if (g) teams.forEach(t=>{ if(t.group===g.name) t.group=''; });
+  groups = groups.filter(x=>x.id!==id);
+  save(); refreshGroupSelects(); renderGroups();
 }
 
 function refreshGroupSelects() {
@@ -299,22 +274,22 @@ function renderTeams() {
   refreshGroupSelects();
   const grid = document.getElementById('team-grid');
   let list = teams;
-  if (teamGroupFilter !== 'all') list = list.filter(t=>t.group_name===teamGroupFilter);
+  if (teamGroupFilter !== 'all') list = list.filter(t=>t.group===teamGroupFilter);
   if (!list.length) {
     grid.innerHTML = `<div class="empty-state card" style="grid-column:1/-1"><i class="fas fa-shield-alt"></i><h3>No Teams</h3><p>Add a team to get started</p></div>`;
     return;
   }
   grid.innerHTML = list.map(t=>{
-    const pts = t.won*2+t.nr, nrr=t.nrr||'+0.000';
+    const pts = t.won*2+t.nr, nrr=calcNRR(t.code);
     return `<div class="team-card">
       <div class="tc-header" style="background:linear-gradient(135deg,${t.color}cc,${t.color}55)">
         <div class="tc-badge">${t.code}</div>
         <div><div class="tc-name">${t.name}</div><div class="tc-code">${t.code}</div></div>
       </div>
       <div class="tc-body">
-        ${t.group_name?`<div class="group-chip"><i class="fas fa-layer-group"></i>${t.group_name}</div>`:''}
+        ${t.group?`<div class="group-chip"><i class="fas fa-layer-group"></i>${t.group}</div>`:''}
         <div class="tc-meta">
-          <div class="tc-meta-row"><i class="fas fa-map-pin"></i><span>${t.home_ground||'—'}</span></div>
+          <div class="tc-meta-row"><i class="fas fa-map-pin"></i><span>${t.ground||'—'}</span></div>
           <div class="tc-meta-row"><i class="fas fa-user"></i><span>Captain: <strong>${t.captain||'—'}</strong></span></div>
           <div class="tc-meta-row"><i class="fas fa-users"></i><span>${teamPlayers(t.code).length} players registered</span></div>
         </div>
@@ -345,10 +320,10 @@ function openEditTeam(id) {
   document.getElementById('f-tname2').value  = t.name;
   document.getElementById('f-tcode').value   = t.code;
   document.getElementById('f-tcolor').value  = t.color;
-  document.getElementById('f-tground').value = t.home_ground||'';
+  document.getElementById('f-tground').value = t.ground||'';
   document.getElementById('f-tcaptain').value= t.captain||'';
   refreshGroupSelects();
-  document.getElementById('f-tgroup').value  = t.group_name||'';
+  document.getElementById('f-tgroup').value  = t.group||'';
   openModal('modal-add-team');
 }
 
@@ -356,49 +331,26 @@ function saveTeam() {
   const name    = document.getElementById('f-tname2').value.trim();
   const code    = document.getElementById('f-tcode').value.trim().toUpperCase();
   const color   = document.getElementById('f-tcolor').value;
-  const group_name   = document.getElementById('f-tgroup').value || null;
+  const group   = document.getElementById('f-tgroup').value;
   const captain = document.getElementById('f-tcaptain').value.trim();
-  const home_ground  = document.getElementById('f-tground').value.trim();
+  const ground  = document.getElementById('f-tground').value.trim();
   if (!name||!code) return showToast('Name and code required','error');
-  
   if (editTeamId) {
-    // Update existing team
-    apiCall('teams', 'PUT', {name,code,color,group_name,captain,ground:home_ground}, `&id=${editTeamId}`).then(async res => {
-      if (!res) return;
-      await Promise.all([refreshTeamsAndMatches(), refreshPlayersData()]);
-      refreshGroupSelects();
-      renderTeams();
-      renderPlayers();
-      closeModal('modal-add-team');
-      editTeamId=null;
-      showToast('Team updated');
-    });
+    const t = teams.find(x=>x.id===editTeamId);
+    Object.assign(t, {name,color,group,captain,ground});
+    showToast('Team updated');
   } else {
-    // Create new team
-    apiCall('teams', 'POST', {name,code,color,group_name,captain,ground:home_ground}).then(res => {
-      if (res && res.id) {
-        teams.push({id:res.id,name,code,color,group_name,captain,home_ground,played:0,won:0,lost:0,nr:0,nrr:0});
-        renderTeams();
-        closeModal('modal-add-team');
-        editTeamId=null;
-        showToast(`${name} added`);
-      }
-    }).catch(e => showToast(`Create failed: ${e.message}`, 'error'));
+    if (teams.find(t=>t.code===code)) return showToast('Team code exists','error');
+    teams.push({id:nextId(teams),name,code,color,group,captain,ground,played:0,won:0,lost:0,nr:0});
+    showToast(`${name} added`);
   }
+  save(); renderTeams(); closeModal('modal-add-team'); editTeamId=null;
 }
 
 function deleteTeam(id) {
   if (!confirm('Delete team?')) return;
-  
-  apiCall('teams', 'DELETE', null, `&id=${id}`).then(res => {
-    const removedTeam = teams.find(t=>t.id===id);
-    teams = teams.filter(t=>t.id!==id);
-    if (removedTeam) players = players.filter(p=>p.team_code!==removedTeam.code);
-    renderTeams();
-    renderPlayers();
-    updateStats();
-    showToast('Team deleted');
-  });
+  teams = teams.filter(t=>t.id!==id);
+  save(); renderTeams(); updateStats();
 }
 
 // ─── MATCHES ─────────────────────────────────────────────────
@@ -408,66 +360,49 @@ function toggleCustomOvers() {
 }
 
 function scheduleMatch() {
-  const team1_code    = document.getElementById('f-mt1').value;
-  const team2_code    = document.getElementById('f-mt2').value;
-  const match_date    = document.getElementById('f-mdate').value;
+  const t1    = document.getElementById('f-mt1').value;
+  const t2    = document.getElementById('f-mt2').value;
+  const date  = document.getElementById('f-mdate').value;
   const venue = document.getElementById('f-mvenue').value.trim();
-  const match_type  = document.getElementById('f-mtype').value;
-  let overs_per_innings   = document.getElementById('f-movers').value;
-  if (overs_per_innings==='custom') overs_per_innings = document.getElementById('f-mcustom').value;
-  overs_per_innings = parseInt(overs_per_innings)||20;
-  let max_wickets = document.getElementById('f-mwickets').value;
-  if (max_wickets==='auto') max_wickets = 10; else max_wickets = parseInt(max_wickets)||10;
-  if (!team1_code||!team2_code||!match_date) return showToast('Teams and date required','error');
-  if (team1_code===team2_code) return showToast('Teams must be different','error');
-  
-  apiCall('matches', 'POST', {team1_code, team2_code, match_date, venue, match_type, overs_per_innings, max_wickets}).then(res => {
-    if (res) {
-      matches.push({id:res.id, team1_code, team2_code, match_date, venue, match_type, overs_per_innings, max_wickets, status:'upcoming', score1:'', score2:'', winner_code:null});
-      renderMatches();
-      updateStats();
-      closeModal('modal-add-match');
-      showToast('Match scheduled');
-    }
-  });
-}
-
-function deleteMatch(id) {
-  if (!confirm('Delete match?')) return;
-  
-  apiCall('matches', 'DELETE', null, `&id=${id}`).then(res => {
-    matches=matches.filter(m=>m.id!==id);
-    renderMatches();
-    updateStats();
-    showToast('Match deleted');
-  }).catch(e => showToast(`Delete failed: ${e.message}`, 'error'));
+  const type  = document.getElementById('f-mtype').value;
+  let overs   = document.getElementById('f-movers').value;
+  if (overs==='custom') overs = document.getElementById('f-mcustom').value;
+  overs = parseInt(overs)||20;
+  let maxW = document.getElementById('f-mwickets').value;
+  if (maxW==='auto') maxW = 10; else maxW = parseInt(maxW)||10;
+  if (!t1||!t2||!date) return showToast('Teams and date required','error');
+  if (t1===t2) return showToast('Teams must be different','error');
+  matches.push({id:nextId(matches),t1,t2,date,venue,type,overs,maxW,status:'upcoming',s1:'',s2:'',winner:null,summary:'',potm:'',scorecard:null});
+  save(); renderMatches(); updateStats(); closeModal('modal-add-match');
+  showToast('Match scheduled');
 }
 
 function renderMatches() {
   const list = document.getElementById('matches-list');
   let data = matchFilter==='all' ? matches : matches.filter(m=>m.status===matchFilter);
-  data = [...data].sort((a,b)=>new Date(a.match_date)-new Date(b.match_date));
+  data = [...data].sort((a,b)=>new Date(a.date)-new Date(b.date));
   if (!data.length) {
     list.innerHTML=`<div class="empty-state card"><i class="fas fa-calendar-alt"></i><h3>No Matches</h3><p>No ${matchFilter} matches</p></div>`;
     return;
   }
   list.innerHTML = data.map(m=>{
     const isLive = m.status==='live';
-    const badgeClass = {'league':'mb-league','quarter':'mb-quarter','semi':'mb-semi','final':'mb-final'}[m.match_type]||'mb-league';
+    const badgeClass = {'league':'mb-league','quarter':'mb-quarter','semi':'mb-semi','final':'mb-final'}[m.type]||'mb-league';
+    const sCls = {'upcoming':'sb-upcoming','live':'sb-live','completed':'sb-completed'}[m.status];
     return `<div class="match-card ${isLive?'live-card-m':''}">
       <div style="display:flex;flex-direction:column;gap:6px;min-width:90px">
-        <span class="match-badge ${isLive?'mb-live':badgeClass}">${isLive?'🔴 LIVE':m.match_type.toUpperCase()}</span>
-        <span style="font-size:.72rem;color:var(--muted)">${fmtDate(m.match_date)}</span>
-        <span style="font-size:.68rem;color:var(--muted)">${m.overs_per_innings} ov | ${m.max_wickets}wkts</span>
+        <span class="match-badge ${isLive?'mb-live':badgeClass}">${isLive?'🔴 LIVE':m.type.toUpperCase()}</span>
+        <span style="font-size:.72rem;color:var(--muted)">${fmtDate(m.date)}</span>
+        <span style="font-size:.68rem;color:var(--muted)">${m.overs} ov | ${m.maxW}wkts</span>
       </div>
       <div class="match-teams">
-        <div class="match-team">${ta(m.team1_code,36)}<div><div class="mt-nm">${getTeamName(m.team1_code)}</div>${m.score1?`<div class="mt-sc">${m.score1}</div>`:''}</div></div>
+        <div class="match-team">${ta(m.t1,36)}<div><div class="mt-nm">${getTeamName(m.t1)}</div>${m.s1?`<div class="mt-sc">${m.s1}</div>`:''}</div></div>
         <div class="match-vs">VS</div>
-        <div class="match-team">${ta(m.team2_code,36)}<div><div class="mt-nm">${getTeamName(m.team2_code)}</div>${m.score2?`<div class="mt-sc">${m.score2}</div>`:''}</div></div>
+        <div class="match-team">${ta(m.t2,36)}<div><div class="mt-nm">${getTeamName(m.t2)}</div>${m.s2?`<div class="mt-sc">${m.s2}</div>`:''}</div></div>
       </div>
       <div class="match-info">
         <span><i class="fas fa-map-pin" style="margin-right:4px"></i>${m.venue||'TBD'}</span>
-        ${m.winner_code?`<span style="color:var(--accent);font-weight:700">${getTeamName(m.winner_code)} won</span>`:''}
+        ${m.winner?`<span style="color:var(--accent);font-weight:700">${getTeamName(m.winner)} won</span>`:''}
       </div>
       <div class="match-actions">
         ${m.status==='completed'?`<button class="btn-sm btn-view" onclick="showScorecard(${m.id})"><i class="fas fa-list"></i> Card</button>`:''}
@@ -485,6 +420,11 @@ document.querySelectorAll('.filter-btn[data-mf]').forEach(b=>{
   });
 });
 
+function deleteMatch(id) {
+  if (!confirm('Delete match?')) return;
+  matches=matches.filter(m=>m.id!==id); save(); renderMatches(); updateStats();
+}
+
 function goLive(id) {
   navigateTo('livescore');
   setTimeout(()=>{ document.getElementById('f-livematch').value=id; openModal('modal-start-live'); },100);
@@ -493,13 +433,13 @@ function goLive(id) {
 function showScorecard(id) {
   const m = matches.find(x=>x.id===id);
   if (!m) return;
-  const sc = m.scorecard_json ? JSON.parse(m.scorecard_json) : null;
+  const sc = m.scorecard;
   const body = document.getElementById('scorecard-body');
   if (!sc) {
     body.innerHTML = `<div style="text-align:center;padding:30px;color:var(--muted)">No detailed scorecard available for this match.</div>
-      <div style="text-align:center;font-size:.9rem"><strong>${getTeamName(m.team1_code)} ${m.score1||'—'}</strong> vs <strong>${getTeamName(m.team2_code)} ${m.score2||'—'}</strong><br>
-      ${m.result_summary?`<div style="color:var(--accent);margin-top:8px">${m.result_summary}</div>`:''}
-      ${m.player_of_match?`<div style="color:var(--muted);margin-top:6px">POTM: ${m.player_of_match}</div>`:''}</div>`;
+      <div style="text-align:center;font-size:.9rem"><strong>${getTeamName(m.t1)} ${m.s1||'—'}</strong> vs <strong>${getTeamName(m.t2)} ${m.s2||'—'}</strong><br>
+      ${m.summary?`<div style="color:var(--accent);margin-top:8px">${m.summary}</div>`:''}
+      ${m.potm?`<div style="color:var(--muted);margin-top:6px">POTM: ${m.potm}</div>`:''}</div>`;
   } else {
     body.innerHTML = buildScorecardHTML(m, sc);
   }
@@ -520,9 +460,9 @@ function buildScorecardHTML(m, sc) {
       <div class="extras-bar" style="margin:8px 0 12px">Extras: ${(ex.wide||0)+(ex.noBall||0)+(ex.legBye||0)} (Wd:${ex.wide||0} Nb:${ex.noBall||0} Lb:${ex.legBye||0})</div>
       <div class="table-wrap"><table class="data-table"><thead><tr><th>Bowler</th><th>O</th><th>M</th><th>R</th><th>W</th><th>Econ</th></tr></thead><tbody>${bwRows||'<tr><td colspan="6" style="color:var(--muted);text-align:center">No data</td></tr>'}</tbody></table></div>`;
   };
-  return `<div style="margin-bottom:12px"><strong style="color:var(--accent)">${m.result_summary}</strong>${m.player_of_match?`<div style="font-size:.8rem;color:var(--muted);margin-top:4px">Player of the Match: <strong style="color:var(--text)">${m.player_of_match}</strong></div>`:''}</div>
-    ${renderInn(sc.inn1, getTeamName(m.team1_code) + ' Innings')}
-    ${renderInn(sc.inn2, getTeamName(m.team2_code) + ' Innings')}`;
+  return `<div style="margin-bottom:12px"><strong style="color:var(--accent)">${m.summary}</strong>${m.potm?`<div style="font-size:.8rem;color:var(--muted);margin-top:4px">Player of the Match: <strong style="color:var(--text)">${m.potm}</strong></div>`:''}</div>
+    ${renderInn(sc.inn1, getTeamName(m.t1) + ' Innings')}
+    ${renderInn(sc.inn2, getTeamName(m.t2) + ' Innings')}`;
 }
 
 // ─── PLAYERS ─────────────────────────────────────────────────
@@ -535,16 +475,16 @@ function renderPlayers() {
   }
   tbody.innerHTML = list.map((p,i)=>{
     const rbMap={batsman:'rb-bat',bowler:'rb-bow',allrounder:'rb-all',wicketkeeper:'rb-wk'};
-    const col=getTeamColor(p.team_code);
+    const col=getTeamColor(p.team);
     const initials=p.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
     return `<tr>
-      <td style="color:var(--muted)">${p.jersey_number||i+1}</td>
-      <td><div style="display:flex;align-items:center;gap:9px"><div class="ta" style="background:${col};width:30px;height:30px;font-size:.68rem">${initials}</div><div><div style="font-weight:600">${p.name}</div><div style="font-size:.7rem;color:var(--muted)">${p.nationality||''}</div></div></div></td>
-      <td><div style="display:flex;align-items:center;gap:7px">${ta(p.team_code,22)}<span>${getTeamName(p.team_code)}</span></div></td>
+      <td style="color:var(--muted)">${p.jersey||i+1}</td>
+      <td><div style="display:flex;align-items:center;gap:9px"><div class="ta" style="background:${col};width:30px;height:30px;font-size:.68rem">${initials}</div><div><div style="font-weight:600">${p.name}</div><div style="font-size:.7rem;color:var(--muted)">${p.country||''}</div></div></div></td>
+      <td><div style="display:flex;align-items:center;gap:7px">${ta(p.team,22)}<span>${getTeamName(p.team)}</span></div></td>
       <td><span class="rb ${rbMap[p.role]||'rb-bat'}">${p.role}</span></td>
-      <td>${p.matches_played}</td>
-      <td style="color:var(--blue);font-weight:700">${p.total_runs}</td>
-      <td style="color:var(--yellow);font-weight:700">${p.total_wickets}</td>
+      <td>${p.m}</td>
+      <td style="color:var(--blue);font-weight:700">${p.runs}</td>
+      <td style="color:var(--yellow);font-weight:700">${p.wkts}</td>
       <td><div style="display:flex;gap:6px">
         <button class="btn-sm btn-edit" onclick="openEditPlayer(${p.id})"><i class="fas fa-edit"></i></button>
         <button class="btn-sm btn-del"  onclick="deletePlayer(${p.id})"><i class="fas fa-trash"></i></button>
@@ -571,56 +511,33 @@ function openEditPlayer(id) {
   document.getElementById('player-modal-title').textContent='Edit Player';
   document.getElementById('player-modal-btn').textContent='Save';
   populatePlayerTeamSel();
-  document.getElementById('f-pname').value=p.name; document.getElementById('f-pteam').value=p.team_code;
-  document.getElementById('f-prole').value=p.role; document.getElementById('f-pjersey').value=p.jersey_number||'';
-  document.getElementById('f-pcountry').value=p.nationality||'';
+  document.getElementById('f-pname').value=p.name; document.getElementById('f-pteam').value=p.team;
+  document.getElementById('f-prole').value=p.role; document.getElementById('f-pjersey').value=p.jersey||'';
+  document.getElementById('f-pcountry').value=p.country||'';
   openModal('modal-add-player');
 }
 
 function savePlayer() {
   const name=document.getElementById('f-pname').value.trim();
-  const team_code=document.getElementById('f-pteam').value;
+  const team=document.getElementById('f-pteam').value;
   const role=document.getElementById('f-prole').value;
-  const jersey_number=parseInt(document.getElementById('f-pjersey').value)||0;
-  const nationality=document.getElementById('f-pcountry').value.trim();
-  if(!name||!team_code) return showToast('Name and team required','error');
-  
+  const jersey=parseInt(document.getElementById('f-pjersey').value)||0;
+  const country=document.getElementById('f-pcountry').value.trim();
+  if(!name||!team) return showToast('Name and team required','error');
   if (editPlayerId) {
-    apiCall('players', 'PUT', {name,team_code,role,jersey_number,nationality}, `&id=${editPlayerId}`).then(async res => {
-      if (res) {
-        await refreshPlayersData();
-        renderPlayers();
-        renderTeams();
-        updateStats();
-        closeModal('modal-add-player');
-        editPlayerId=null;
-        showToast('Player updated');
-      }
-    });
+    const p=players.find(x=>x.id===editPlayerId);
+    Object.assign(p,{name,team,role,jersey,country});
+    showToast('Player updated');
   } else {
-    apiCall('players', 'POST', {name,team_code,role,jersey_number,nationality}).then(res => {
-      if (res) {
-        players.push({id:res.id,name,team_code,role,jersey_number,nationality,matches_played:0,total_runs:0,total_wickets:0});
-        renderPlayers();
-        renderTeams();
-        updateStats();
-        closeModal('modal-add-player');
-        editPlayerId=null;
-        showToast(`${name} registered`);
-      }
-    });
+    players.push({id:nextId(players),name,team,role,jersey,country,m:0,runs:0,wkts:0});
+    showToast(`${name} registered`);
   }
+  save(); renderPlayers(); updateStats(); closeModal('modal-add-player'); editPlayerId=null;
 }
 
 function deletePlayer(id) {
   if(!confirm('Remove player?')) return;
-  
-  apiCall('players', 'DELETE', null, `&id=${id}`).then(res => {
-    players=players.filter(p=>p.id!==id);
-    renderPlayers();
-    updateStats();
-    showToast('Player removed');
-  }).catch(e => showToast(`Delete failed: ${e.message}`, 'error'));
+  players=players.filter(p=>p.id!==id); save(); renderPlayers(); updateStats();
 }
 
 function bulkAddPlayers() {
@@ -783,7 +700,7 @@ function populateStartLiveModal() {
   const avail = matches.filter(m=>m.status==='upcoming'||m.status==='live');
   const sel = document.getElementById('f-livematch');
   sel.innerHTML = avail.length
-    ? avail.map(m=>`<option value="${m.id}">${getTeamName(m.team1_code)} vs ${getTeamName(m.team2_code)} — ${fmtDate(m.match_date)} (${m.overs_per_innings}ov)</option>`).join('')
+    ? avail.map(m=>`<option value="${m.id}">${getTeamName(m.t1)} vs ${getTeamName(m.t2)} — ${fmtDate(m.date)} (${m.overs}ov)</option>`).join('')
     : '<option>No upcoming matches</option>';
   sel.onchange = updateLiveTossTeams;
   updateLiveTossTeams();
@@ -792,25 +709,24 @@ function populateStartLiveModal() {
 function updateLiveTossTeams() {
   const id=parseInt(document.getElementById('f-livematch').value);
   const m=matches.find(x=>x.id===id); if(!m) return;
-  document.getElementById('f-livetoss').innerHTML=[m.team1_code,m.team2_code].map(c=>`<option value="${c}">${getTeamName(c)} (${c})</option>`).join('');
+  document.getElementById('f-livetoss').innerHTML=[m.t1,m.t2].map(c=>`<option value="${c}">${getTeamName(c)} (${c})</option>`).join('');
 }
 
 function startLiveMatch() {
   const id=parseInt(document.getElementById('f-livematch').value);
   const toss=document.getElementById('f-livetoss').value;
   const choice=document.getElementById('f-livechoice').value;
-  const m=matches.find(x=>x.id===id); 
-  if(!m) return showToast('Match not found','error');
-  const batFirst = choice==='bat' ? toss : (toss===m.team1_code?m.team2_code:m.team1_code);
-  const bowlFirst= batFirst===m.team1_code ? m.team2_code : m.team1_code;
+  const m=matches.find(x=>x.id===id); if(!m) return showToast('Match not found','error');
+  const batFirst = choice==='bat' ? toss : (toss===m.t1?m.t2:m.t1);
+  const bowlFirst= batFirst===m.t1 ? m.t2 : m.t1;
 
   // Determine max wickets from squad
   const batSquad = teamPlayers(batFirst).length;
-  const actualMaxW = Math.min(m.max_wickets, batSquad>1 ? batSquad-1 : 10);
+  const actualMaxW = Math.min(m.maxW, batSquad>1 ? batSquad-1 : 10);
 
   LS = {
-    matchId:id, t1:m.team1_code, t2:m.team2_code, battingFirst:batFirst,
-    inn:1, maxOvers:m.overs_per_innings, maxWickets:actualMaxW,
+    matchId:id, t1:m.t1, t2:m.t2, battingFirst:batFirst,
+    inn:1, maxOvers:m.overs, maxWickets:actualMaxW,
     toss:{winner:toss,choice}, status:'live',
     innings:[mkInnData(batFirst,bowlFirst), mkInnData(bowlFirst,batFirst)],
   };
@@ -825,10 +741,7 @@ function startLiveMatch() {
 
   // Mark match live
   const mIdx=matches.findIndex(x=>x.id===id);
-  if(mIdx!==-1){
-    matches[mIdx].status='live';
-    apiCall('matches', 'PUT', {status:'live'}, `&id=${id}`).catch(e => console.error('Failed to update match status:', e));
-  }
+  if(mIdx!==-1){matches[mIdx].status='live'; save();}
   saveLive(); closeModal('modal-start-live'); renderLivePage();
   showToast(`🏏 ${getTeamName(batFirst)} batting first! Max wickets: ${actualMaxW}`);
 }
@@ -1057,39 +970,14 @@ function declareWinner() {
   const mIdx=matches.findIndex(m=>m.id===LS.matchId);
   if(mIdx!==-1){
     const m=matches[mIdx];
-    const score1=inn1?`${inn1.runs}/${inn1.wickets} (${oversStr(inn1.balls)})`:'-';
-    const score2=inn2?`${inn2.runs}/${inn2.wickets} (${oversStr(inn2.balls)})`:'-';
-    const loser=winner===m.team1_code ? m.team2_code : m.team1_code;
-    const scorecard={inn1,inn2};
-
-    Object.assign(m, {
-      status:'completed',
-      winner_code:winner,
-      result_summary:summary,
-      score1,
-      score2,
-      scorecard,
-      scorecard_json: JSON.stringify(scorecard),
-    });
-
-    const wt=getTeam(winner);
-    const lt=getTeam(loser);
-    if(wt){wt.won++;wt.played++;wt.nrr=parseFloat(calcNRR(winner))||0;}
-    if(lt){lt.lost++;lt.played++;lt.nrr=parseFloat(calcNRR(loser))||0;}
-
-    apiCall('matches', 'PUT', {
-      score1,
-      score2,
-      winner_code:winner,
-      result_summary:summary,
-      scorecard,
-    }, `&id=${LS.matchId}&result=1`).then(async res => {
-      if (!res) return;
-      await refreshTeamsAndMatches();
-      refreshGroupSelects();
-      updateStats();
-      rerenderActivePage();
-    });
+    m.status='completed'; m.winner=winner; m.summary=summary;
+    m.s1=inn1?`${inn1.runs}/${inn1.wickets} (${oversStr(inn1.balls)})`:'-';
+    m.s2=inn2?`${inn2.runs}/${inn2.wickets} (${oversStr(inn2.balls)})`:'-';
+    m.scorecard={inn1,inn2};
+    const wt=getTeam(winner), lt=getTeam(winner===m.t1?m.t2:m.t1);
+    if(wt){wt.won++;wt.played++;}
+    if(lt){lt.lost++;lt.played++;}
+    save();
   }
   document.getElementById('nav-live-badge').style.display='none';
   renderLivePage(); showToast(`🏆 Match over! ${summary}`);
@@ -1097,14 +985,10 @@ function declareWinner() {
 
 function endLiveMatch() {
   if(!confirm('Clear live match data?')) return;
-  const matchId=LS.matchId;
   LS=JSON.parse(JSON.stringify(LS_DEF));
   saveLive();
-  const mIdx=matches.findIndex(m=>m.id===matchId);
-  if(mIdx!==-1&&matches[mIdx].status==='live'){
-    matches[mIdx].status='upcoming';
-    apiCall('matches', 'PUT', {status:'upcoming'}, `&id=${matchId}`);
-  }
+  const mIdx=matches.findIndex(m=>m.id===LS.matchId);
+  if(mIdx!==-1&&matches[mIdx].status==='live'){matches[mIdx].status='upcoming';save();}
   document.getElementById('nav-live-badge').style.display='none';
   renderLivePage(); showToast('Live match ended');
 }
@@ -1130,10 +1014,10 @@ function syncMatch() {
   const mIdx=matches.findIndex(m=>m.id===LS.matchId);
   if(mIdx===-1) return;
   const inn1=LS.innings[0],inn2=LS.innings[1];
-  matches[mIdx].score1=inn1?`${inn1.runs}/${inn1.wickets}`:'';
-  matches[mIdx].score2=inn2&&inn2.balls>0?`${inn2.runs}/${inn2.wickets}`:'';
+  matches[mIdx].s1=inn1?`${inn1.runs}/${inn1.wickets}`:'';
+  matches[mIdx].s2=inn2&&inn2.balls>0?`${inn2.runs}/${inn2.wickets}`:'';
+  save();
   if(document.getElementById('page-dashboard').classList.contains('active')) renderDashboard();
-  if(document.getElementById('page-matches').classList.contains('active')) renderMatches();
 }
 
 // ─── RENDER TOP BOARD ─────────────────────────────────────────
@@ -1145,9 +1029,9 @@ function renderTopBoard() {
   const s2=inn2&&inn2.balls>0?`${inn2.runs}/${inn2.wickets} (${oversStr(inn2.balls)})`:'-';
   document.getElementById('ls-top-board').innerHTML=`
     <div class="ls-tb-teams">
-      <div class="ls-tb-team">${ta(m.team1_code,42)}<div><div class="ls-tb-name">${getTeamName(m.team1_code)}</div><div class="ls-tb-score">${s1}</div></div></div>
+      <div class="ls-tb-team">${ta(m.t1,42)}<div><div class="ls-tb-name">${getTeamName(m.t1)}</div><div class="ls-tb-score">${s1}</div></div></div>
       <span class="ls-tb-vs">VS</span>
-      <div class="ls-tb-team">${ta(m.team2_code,42)}<div><div class="ls-tb-name">${getTeamName(m.team2_code)}</div><div class="ls-tb-score">${s2}</div></div></div>
+      <div class="ls-tb-team">${ta(m.t2,42)}<div><div class="ls-tb-name">${getTeamName(m.t2)}</div><div class="ls-tb-score">${s2}</div></div></div>
       <span class="ls-live-pill"><span class="live-dot" style="width:7px;height:7px"></span>${LS.status==='completed'?'FINAL':'LIVE'}</span>
     </div>
     <div class="ls-tb-right">
@@ -1260,23 +1144,22 @@ function renderMatchSummary() {
   const allBowlers=[...Object.entries(inn1?.bowlers||{}),...Object.entries(inn2?.bowlers||{})];
   const topBowl=allBowlers.sort((a,b)=>b[1].wickets-a[1].wickets)[0];
 
-  const winCode=m.winner_code;
-  const winCol=getTeamColor(winCode);
+  const winCol=getTeamColor(m.winner);
   summaryDiv.innerHTML=`
     <div class="ms-trophy">🏆</div>
     <div class="ms-title">MATCH OVER</div>
-    <div class="ms-winner" style="color:${winCol}">${getTeamName(winCode)}</div>
+    <div class="ms-winner" style="color:${winCol}">${getTeamName(m.winner)}</div>
     <div class="ms-scores">
       <div class="ms-team"><div class="ms-team-code" style="color:${getTeamColor(LS.t1)}">${LS.t1}</div><div class="ms-team-score">${inn1?inn1.runs+'/'+inn1.wickets:'—'}</div><div class="ms-team-name">${getTeamName(LS.t1)}</div><div style="font-size:.72rem;color:var(--muted)">${inn1?oversStr(inn1.balls)+' ov':''}</div></div>
       <div class="ms-vs">VS</div>
       <div class="ms-team"><div class="ms-team-code" style="color:${getTeamColor(LS.t2)}">${LS.t2}</div><div class="ms-team-score">${inn2?inn2.runs+'/'+inn2.wickets:'—'}</div><div class="ms-team-name">${getTeamName(LS.t2)}</div><div style="font-size:.72rem;color:var(--muted)">${inn2?oversStr(inn2.balls)+' ov':''}</div></div>
     </div>
-    <div class="ms-result">${m.result_summary||'Match Complete'}</div>
+    <div class="ms-result">${m.summary||'Match Complete'}</div>
     <div style="display:flex;gap:20px;justify-content:center;flex-wrap:wrap;margin-bottom:16px">
       ${topBat?`<div style="text-align:center"><div style="font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Top Scorer</div><div style="font-weight:700;color:var(--blue)">${topBat[0]}</div><div style="font-size:.8rem;color:var(--muted)">${topBat[1].runs} runs (${topBat[1].balls}b)</div></div>`:''}
       ${topBowl?`<div style="text-align:center"><div style="font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Top Bowler</div><div style="font-weight:700;color:var(--yellow)">${topBowl[0]}</div><div style="font-size:.8rem;color:var(--muted)">${topBowl[1].wickets}/${topBowl[1].runs} (${oversStr(topBowl[1].balls)})</div></div>`:''}
     </div>
-    ${m.player_of_match?`<div class="ms-potm"><i class="fas fa-star"></i>Player of the Match: <strong>${m.player_of_match}</strong></div>`:''}
+    ${m.potm?`<div class="ms-potm"><i class="fas fa-star"></i>Player of the Match: <strong>${m.potm}</strong></div>`:''}
     <div class="ms-btn-row">
       <button class="btn-ghost" onclick="showScorecard(${LS.matchId})" style="pointer-events:auto"><i class="fas fa-list"></i> Full Scorecard</button>
       <button class="btn-primary" onclick="endLiveMatch()"><i class="fas fa-check"></i> Done</button>
@@ -1285,12 +1168,10 @@ function renderMatchSummary() {
 
 // ─── INIT ────────────────────────────────────────────────────
 (function init() {
-  // Load all data from API on page load
-  loadAllData().then(() => {
-    refreshGroupSelects();
-    updateStats();
-    if(LS.status!=='idle') {
-      document.getElementById('nav-live-badge').style.display='inline-flex';
-    }
-  });
+  refreshGroupSelects();
+  renderDashboard();
+  updateStats();
+  if(LS.status!=='idle') {
+    document.getElementById('nav-live-badge').style.display='inline-flex';
+  }
 })();

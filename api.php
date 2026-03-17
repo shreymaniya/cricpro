@@ -208,6 +208,32 @@ function recalculatePlayerStats(PDO $db): void {
     }
 }
 
+function refreshDerivedData(PDO $db): void {
+    $lockName = 'cricketpro_refresh_derived_data';
+    $lockStmt = $db->prepare("SELECT GET_LOCK(:name, 10)");
+    $releaseStmt = $db->prepare("SELECT RELEASE_LOCK(:name)");
+    $lockStmt->execute(['name' => $lockName]);
+    $lockAcquired = (int)$lockStmt->fetchColumn() === 1;
+
+    if (!$lockAcquired) {
+        throw new RuntimeException('Could not refresh derived data');
+    }
+
+    try {
+        $db->beginTransaction();
+        recalculateTeamStandings($db);
+        recalculatePlayerStats($db);
+        $db->commit();
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        throw $e;
+    } finally {
+        $releaseStmt->execute(['name' => $lockName]);
+    }
+}
+
 /* ============================================================
    GROUPS
    ============================================================ */
@@ -238,6 +264,7 @@ function handleTeams(string $m, ?int $id): void {
     $db = getDB();
     switch ($m) {
         case 'GET':
+            refreshDerivedData($db);
             $filter = isset($_GET['group']) ? " WHERE t.group_name = :g" : '';
             $stmt = $db->prepare("SELECT t.*, COALESCE(g.name, t.group_name) AS group_name, (t.won*2+t.nr) AS pts FROM teams t LEFT JOIN groups g ON t.group_id = g.id $filter ORDER BY pts DESC, t.nrr DESC");
             $stmt->execute(isset($_GET['group']) ? ['g' => $_GET['group']] : []);
@@ -315,6 +342,7 @@ function handlePlayers(string $m, ?int $id): void {
 
     switch ($m) {
         case 'GET':
+            refreshDerivedData($db);
             $where='1=1'; $params=[];
             if (isset($_GET['team'])) { $where='p.team_code=:t'; $params=['t'=>strtoupper($_GET['team'])]; }
             if (isset($_GET['role'])) { $where.=' AND p.role=:r'; $params['r']=$_GET['role']; }
@@ -503,6 +531,7 @@ function recalcNRR(PDO $db, string $code): void {
    ============================================================ */
 function handleStandings(): void {
     $db=getDB();
+    refreshDerivedData($db);
     $stmt=$db->query("SELECT t.*,(t.won*2+t.nr) AS pts,COALESCE(g.name, t.group_name) AS group_name FROM teams t LEFT JOIN groups g ON t.group_id=g.id ORDER BY COALESCE(g.name, t.group_name),pts DESC,t.nrr DESC");
     respond($stmt->fetchAll());
 }
@@ -512,6 +541,7 @@ function handleStandings(): void {
    ============================================================ */
 function handleStats(): void {
     $db=getDB();
+    refreshDerivedData($db);
     respond([
         'teams'     => (int)$db->query("SELECT COUNT(*) FROM teams")->fetchColumn(),
         'players'   => (int)$db->query("SELECT COUNT(*) FROM players")->fetchColumn(),

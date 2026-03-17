@@ -246,14 +246,11 @@ function deleteGroup(id) {
   if (!g) return;
   
   apiCall('groups', 'DELETE', null, `&id=${id}`).then(res => {
-    if (res) {
-      groups = groups.filter(x=>x.id!==id);
-      teams.forEach(t=>{ if(t.group_name===g.name) t.group_name=null; });
-      refreshGroupSelects();
-      renderGroups();
-      showToast('Group deleted');
-    }
-  });
+    groups = groups.filter(x=>x.id!==id);
+    renderPage('dashboard');
+    updateStats();
+    showToast('Group deleted');
+  }).catch(e => showToast(`Delete failed: ${e.message}`, 'error'));
 }
 
 function refreshGroupSelects() {
@@ -335,32 +332,30 @@ function saveTeam() {
   const color   = document.getElementById('f-tcolor').value;
   const group_name   = document.getElementById('f-tgroup').value || null;
   const captain = document.getElementById('f-tcaptain').value.trim();
-  const ground  = document.getElementById('f-tground').value.trim();
+  const home_ground  = document.getElementById('f-tground').value.trim();
   if (!name||!code) return showToast('Name and code required','error');
   
   if (editTeamId) {
     // Update existing team
-    apiCall('teams', 'PUT', {name,color,group_name,captain,ground}, `&id=${editTeamId}`).then(res => {
-      if (res) {
-        const t = teams.find(x=>x.id===editTeamId);
-        if (t) Object.assign(t, {name,color,group_name,captain,home_ground: ground});
-        renderTeams();
-        closeModal('modal-add-team');
-        editTeamId=null;
-        showToast('Team updated');
-      }
-    });
+    apiCall('teams', 'PUT', {name,color,group_name,captain,home_ground}, `&id=${editTeamId}`).then(res => {
+      const t = teams.find(x=>x.id===editTeamId);
+      if (t) Object.assign(t, {name,color,group_name,captain,home_ground});
+      renderTeams();
+      closeModal('modal-add-team');
+      editTeamId=null;
+      showToast('Team updated');
+    }).catch(e => showToast(`Update failed: ${e.message}`, 'error'));
   } else {
     // Create new team
-    apiCall('teams', 'POST', {name,code,color,group_name,captain,ground}).then(res => {
-      if (res) {
-        teams.push({id:res.id,name,code,color,group_name,captain,home_ground: ground,played:0,won:0,lost:0,nr:0,nrr:0});
+    apiCall('teams', 'POST', {name,code,color,group_name,captain,home_ground}).then(res => {
+      if (res && res.id) {
+        teams.push({id:res.id,name,code,color,group_name,captain,home_ground,played:0,won:0,lost:0,nr:0,nrr:0});
         renderTeams();
         closeModal('modal-add-team');
         editTeamId=null;
         showToast(`${name} added`);
       }
-    });
+    }).catch(e => showToast(`Create failed: ${e.message}`, 'error'));
   }
 }
 
@@ -368,13 +363,13 @@ function deleteTeam(id) {
   if (!confirm('Delete team?')) return;
   
   apiCall('teams', 'DELETE', null, `&id=${id}`).then(res => {
-    if (res) {
-      teams = teams.filter(t=>t.id!==id);
-      renderTeams();
-      updateStats();
-      showToast('Team deleted');
-    }
-  });
+    teams = teams.filter(t=>t.id!==id);
+    players = players.filter(p=>p.team_code!==id);
+    renderTeams();
+    renderPlayers();
+    updateStats();
+    showToast('Team deleted');
+  }).catch(e => showToast(`Delete failed: ${e.message}`, 'error'));
 }
 
 // ─── MATCHES ─────────────────────────────────────────────────
@@ -412,13 +407,11 @@ function deleteMatch(id) {
   if (!confirm('Delete match?')) return;
   
   apiCall('matches', 'DELETE', null, `&id=${id}`).then(res => {
-    if (res) {
-      matches=matches.filter(m=>m.id!==id);
-      renderMatches();
-      updateStats();
-      showToast('Match deleted');
-    }
-  });
+    matches=matches.filter(m=>m.id!==id);
+    renderMatches();
+    updateStats();
+    showToast('Match deleted');
+  }).catch(e => showToast(`Delete failed: ${e.message}`, 'error'));
 }
 
 function renderMatches() {
@@ -593,13 +586,11 @@ function deletePlayer(id) {
   if(!confirm('Remove player?')) return;
   
   apiCall('players', 'DELETE', null, `&id=${id}`).then(res => {
-    if (res) {
-      players=players.filter(p=>p.id!==id);
-      renderPlayers();
-      updateStats();
-      showToast('Player removed');
-    }
-  });
+    players=players.filter(p=>p.id!==id);
+    renderPlayers();
+    updateStats();
+    showToast('Player removed');
+  }).catch(e => showToast(`Delete failed: ${e.message}`, 'error'));
 }
 
 function bulkAddPlayers() {
@@ -778,7 +769,8 @@ function startLiveMatch() {
   const id=parseInt(document.getElementById('f-livematch').value);
   const toss=document.getElementById('f-livetoss').value;
   const choice=document.getElementById('f-livechoice').value;
-  const m=matches.find(x=>x.id===id); if(!m) return showToast('Match not found','error');
+  const m=matches.find(x=>x.id===id); 
+  if(!m) return showToast('Match not found','error');
   const batFirst = choice==='bat' ? toss : (toss===m.team1_code?m.team2_code:m.team1_code);
   const bowlFirst= batFirst===m.team1_code ? m.team2_code : m.team1_code;
 
@@ -787,8 +779,8 @@ function startLiveMatch() {
   const actualMaxW = Math.min(m.max_wickets, batSquad>1 ? batSquad-1 : 10);
 
   LS = {
-    matchId:id, t1:m.t1, t2:m.t2, battingFirst:batFirst,
-    inn:1, maxOvers:m.overs, maxWickets:actualMaxW,
+    matchId:id, t1:m.team1_code, t2:m.team2_code, battingFirst:batFirst,
+    inn:1, maxOvers:m.overs_per_innings, maxWickets:actualMaxW,
     toss:{winner:toss,choice}, status:'live',
     innings:[mkInnData(batFirst,bowlFirst), mkInnData(bowlFirst,batFirst)],
   };
@@ -803,7 +795,10 @@ function startLiveMatch() {
 
   // Mark match live
   const mIdx=matches.findIndex(x=>x.id===id);
-  if(mIdx!==-1){matches[mIdx].status='live'; save();}
+  if(mIdx!==-1){
+    matches[mIdx].status='live';
+    apiCall('matches', 'PUT', {status:'live'}, `&id=${id}`).catch(e => console.error('Failed to update match status:', e));
+  }
   saveLive(); closeModal('modal-start-live'); renderLivePage();
   showToast(`🏏 ${getTeamName(batFirst)} batting first! Max wickets: ${actualMaxW}`);
 }

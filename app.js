@@ -806,11 +806,18 @@ async function bulkAddPlayers() {
 // ─── STANDINGS ───────────────────────────────────────────────
 function renderStandings() {
   const container = document.getElementById('standings-groups-container');
-  const groupsToShow = groups.length ? groups : [{name:'All Teams'}];
+  const baseGroups = groups.length ? groups.map(g => ({ name:g.name, filter:g.name })) : [{ name:'All Teams', filter:undefined }];
+  const hasUngroupedTeams = teams.some(t => !t.group);
+  const groupsToShow = hasUngroupedTeams
+    ? [...baseGroups, { name:'Ungrouped Teams', filter:'__ungrouped__' }]
+    : baseGroups;
+
   container.innerHTML = groupsToShow.map(g=>{
-    const sorted = calcStandings(groups.length ? g.name : undefined);
-    if (!sorted.length) return '';
-    const rows = sorted.map((t,i)=>`
+    const sorted = g.filter === '__ungrouped__'
+      ? calcStandings().filter(t => !t.group)
+      : calcStandings(g.filter);
+
+    const rows = sorted.length ? sorted.map((t,i)=>`
       <tr>
         <td><span class="pos-badge ${i<2?'p'+(i+1):'pn'}">${i+1}</span></td>
         <td><div style="display:flex;align-items:center;gap:10px">${ta(t.code,32)}<div><div style="font-weight:600">${t.name}</div><div style="font-size:.7rem;color:var(--muted)">${t.code}</div></div></div></td>
@@ -821,7 +828,9 @@ function renderStandings() {
         <td class="pts-cell">${t.pts}</td>
         <td class="${parseFloat(t.nrr)>=0?'nrr-pos':'nrr-neg'}">${t.nrr}</td>
         <td><div class="form-dots">${t.form.map(f=>`<div class="fd fd-${f.toLowerCase()}">${f}</div>`).join('')}</div></td>
-      </tr>`).join('');
+      </tr>`).join('')
+      : `<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:18px">No teams in this group yet</td></tr>`;
+
     return `<div class="standings-group">
       <div class="standings-group-title"><i class="fas fa-layer-group"></i>${g.name}</div>
       <div class="card"><div class="table-wrap"><table class="data-table">

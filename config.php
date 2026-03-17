@@ -7,20 +7,20 @@
 // ============================================================
 // DATABASE CONFIGURATION
 // ============================================================
-// define('DB_HOST',   'localhost');
-// define('DB_NAME',   'cricketpro');
-// define('DB_USER',   'root');
-// define('DB_PASS',   '');
-// define('DB_PORT',   3306);
+define('DB_HOST',   'localhost');
+define('DB_NAME',   'cricketpro');
+define('DB_USER',   'root');
+define('DB_PASS',   '');
+define('DB_PORT',   3306);
 
 // ============================================================
 // Live server DATABASE CONFIGURATION
 // ============================================================
-define('DB_HOST',   'sql102.infinityfree.com');
-define('DB_NAME',   'if0_40799604_cricketpro');
-define('DB_USER',   'if0_40799604');
-define('DB_PASS',   'pxwRovrRZtbfZ');
-define('DB_PORT',   3306);
+// define('DB_HOST',   'sql102.infinityfree.com');
+// define('DB_NAME',   'if0_40799604_cricketpro');
+// define('DB_USER',   'if0_40799604');
+// define('DB_PASS',   'pxwRovrRZtbfZ');
+// define('DB_PORT',   3306);
 
 // ============================================================
 // DATABASE CONNECTION

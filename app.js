@@ -215,20 +215,75 @@ function ta(code, size=36) {
   return `<div class="ta" style="background:${c};width:${size}px;height:${size}px;font-size:${size*0.28}px">${code}</div>`;
 }
 
+const MOBILE_NAV_QUERY = '(max-width: 768px)';
+const THEME_KEY = 'cp_theme';
+const sidebar = document.getElementById('sidebar');
+const sidebarBackdrop = document.getElementById('sidebarBackdrop');
+const themeToggle = document.getElementById('themeToggle');
+const themeToggleIcon = document.getElementById('themeToggleIcon');
+
+function isMobileViewport() {
+  return window.matchMedia(MOBILE_NAV_QUERY).matches;
+}
+
+function syncSidebarState() {
+  const isOpen = sidebar.classList.contains('open') && isMobileViewport();
+  sidebarBackdrop.classList.toggle('open', isOpen);
+  document.body.classList.toggle('sidebar-open', isOpen);
+}
+
+function closeSidebar() {
+  sidebar.classList.remove('open');
+  syncSidebarState();
+}
+
+function toggleSidebar() {
+  sidebar.classList.toggle('open');
+  syncSidebarState();
+}
+
+function applyTheme(theme) {
+  const nextTheme = theme === 'light' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', nextTheme);
+  if (themeToggle) {
+    const label = nextTheme === 'light' ? 'Switch to dark theme' : 'Switch to light theme';
+    themeToggle.setAttribute('aria-label', label);
+    themeToggle.setAttribute('title', label);
+  }
+  if (themeToggleIcon) {
+    themeToggleIcon.className = `fas ${nextTheme === 'light' ? 'fa-sun' : 'fa-moon'}`;
+  }
+}
+
+function initTheme() {
+  const savedTheme = localStorage.getItem(THEME_KEY);
+  const preferredTheme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  applyTheme(savedTheme || preferredTheme);
+}
+
 // ─── NAVIGATION ──────────────────────────────────────────────
 document.querySelectorAll('.nav-item').forEach(el => {
   el.addEventListener('click', e => {
     e.preventDefault();
     navigateTo(el.dataset.page);
-    if (window.innerWidth < 768) document.getElementById('sidebar').classList.remove('open');
   });
 });
 document.querySelectorAll('.see-all').forEach(el => {
   el.addEventListener('click', e => { e.preventDefault(); navigateTo(el.dataset.page); });
 });
-document.getElementById('menuToggle').addEventListener('click', () => {
-  document.getElementById('sidebar').classList.toggle('open');
+document.getElementById('menuToggle').addEventListener('click', toggleSidebar);
+sidebarBackdrop.addEventListener('click', closeSidebar);
+window.addEventListener('resize', syncSidebarState);
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeSidebar();
 });
+if (themeToggle) {
+  themeToggle.addEventListener('click', () => {
+    const nextTheme = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+    localStorage.setItem(THEME_KEY, nextTheme);
+    applyTheme(nextTheme);
+  });
+}
 
 function navigateTo(page) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -242,6 +297,7 @@ function navigateTo(page) {
     players:'Players', standings:'Standings', livescore:'Live Score'
   }[page] || page;
   renderPage(page);
+  if (isMobileViewport()) closeSidebar();
 }
 
 function renderPage(p) {
@@ -1535,6 +1591,8 @@ function syncMatch() {
 }
 
 (async function init() {
+  initTheme();
+  syncSidebarState();
   try {
     await loadAllData();
   } catch (error) {

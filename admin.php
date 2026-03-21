@@ -1,3 +1,7 @@
+<?php
+require_once 'config.php';
+requireAdminAuth(false);
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -34,11 +38,12 @@
   <button class="menu-toggle" id="menuToggle"><i class="fas fa-bars"></i></button>
   <div class="topbar-title" id="page-title">Dashboard</div>
   <div class="topbar-actions">
+    <a class="topbar-link" href="index.php">Public Live Page</a>
     <button class="theme-toggle" id="themeToggle" type="button" aria-label="Switch to light theme" title="Switch theme">
       <i class="fas fa-moon" id="themeToggleIcon"></i>
     </button>
     <div class="search-wrap"><i class="fas fa-search"></i><input type="text" placeholder="Search…" id="globalSearch"/></div>
-    <div class="avatar">AD</div>
+    <a class="topbar-link topbar-link-accent" href="logout.php">Logout</a>
   </div>
 </header>
 
@@ -111,7 +116,8 @@
   <div class="page-header">
     <div><h1 class="page-h1">Players</h1><p class="page-sub">Player registrations & profiles</p></div>
     <div style="display:flex;gap:10px">
-      <button class="btn-ghost" onclick="openModal('modal-bulk-players')"><i class="fas fa-file-import"></i> Bulk Add</button>
+      <button class="btn-ghost" onclick="clearAllPlayers()"><i class="fas fa-trash"></i> Clear All</button>
+      <button class="btn-ghost" onclick="openPlayerSheetModal()"><i class="fas fa-file-arrow-up"></i> Import | Export</button>
       <button class="btn-primary" onclick="openAddPlayer()"><i class="fas fa-plus"></i> Add Player</button>
     </div>
   </div>
@@ -249,23 +255,27 @@
           </div>
         </div>
 
-        <!-- Batting card -->
-        <div class="card ls-card">
-          <div class="ls-section-title">Batting <span id="bat-team-name"></span></div>
-          <table class="data-table ls-table"><thead><tr><th>Batsman</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th>SR</th><th>How Out</th></tr></thead><tbody id="bat-tbody"></tbody></table>
-          <div class="extras-bar" id="extras-bar">Extras: 0 (Wd:0 Nb:0 Lb:0)</div>
-        </div>
+        <div class="ls-secondary-grid">
+          <div class="ls-score-panels">
+            <!-- Batting card -->
+            <div class="card ls-card">
+              <div class="ls-section-title">Batting <span id="bat-team-name"></span></div>
+              <table class="data-table ls-table"><thead><tr><th>Batsman</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th>SR</th><th>How Out</th></tr></thead><tbody id="bat-tbody"></tbody></table>
+              <div class="extras-bar" id="extras-bar">Extras: 0 (Wd:0 Nb:0 Lb:0)</div>
+            </div>
 
-        <!-- Bowling card -->
-        <div class="card ls-card">
-          <div class="ls-section-title">Bowling <span id="bowl-team-name"></span></div>
-          <table class="data-table ls-table"><thead><tr><th>Bowler</th><th>O</th><th>M</th><th>R</th><th>W</th><th>Econ</th></tr></thead><tbody id="bowl-tbody"></tbody></table>
-        </div>
+            <!-- Bowling card -->
+            <div class="card ls-card">
+              <div class="ls-section-title">Bowling <span id="bowl-team-name"></span></div>
+              <table class="data-table ls-table"><thead><tr><th>Bowler</th><th>O</th><th>M</th><th>R</th><th>W</th><th>Econ</th></tr></thead><tbody id="bowl-tbody"></tbody></table>
+            </div>
+          </div>
 
-        <!-- Commentary -->
-        <div class="card ls-card">
-          <div class="ls-section-title"><i class="fas fa-microphone" style="color:var(--accent)"></i> Commentary</div>
-          <div class="commentary-feed" id="commentary-feed"></div>
+          <!-- Commentary -->
+          <div class="card ls-card ls-commentary-card">
+            <div class="ls-section-title"><i class="fas fa-microphone" style="color:var(--accent)"></i> Commentary</div>
+            <div class="commentary-feed" id="commentary-feed"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -413,18 +423,28 @@
 <!-- Bulk Players -->
 <div class="modal-overlay" id="modal-bulk-players">
   <div class="modal" style="max-width:600px">
-    <div class="modal-head"><h3>Bulk Add Players</h3><button class="modal-close" onclick="closeModal('modal-bulk-players')"><i class="fas fa-times"></i></button></div>
+    <div class="modal-head"><h3>Import / Export Players</h3><button class="modal-close" onclick="closeModal('modal-bulk-players')"><i class="fas fa-times"></i></button></div>
     <div class="modal-body">
       <div class="bulk-format-hint">
-        <strong>Format:</strong> One player per line<br>
-        <code>Name, TeamCode, Role, Jersey, Country</code><br>
-        <strong>Roles:</strong> batsman / bowler / allrounder / wicketkeeper<br><br>
-        <strong>Example:</strong><br>
-        <code>Rohit Sharma, MI, batsman, 45, India<br>Jasprit Bumrah, MI, bowler, 93, India</code>
+        <strong>Excel-friendly format:</strong> Download the template, fill it in Excel, then save it as CSV before importing.<br>
+        <code>Player Name, Team Code, Role, Jersey Number, Country, Matches Played, Total Runs, Total Wickets</code><br>
+        <strong>Roles:</strong> batsman / bowler / allrounder / wicketkeeper
+      </div>
+      <div class="sheet-actions">
+        <button class="btn-ghost" type="button" onclick="downloadPlayerTemplate()"><i class="fas fa-file-arrow-down"></i> Download Template</button>
+        <button class="btn-ghost" type="button" onclick="exportPlayersSheet()"><i class="fas fa-file-export"></i> Export Current Players</button>
+      </div>
+      <div class="form-group">
+        <label>Import CSV File</label>
+        <label class="sheet-file-input" for="f-bulk-file">
+          <input type="file" id="f-bulk-file" accept=".csv,text/csv,.txt"/>
+          <span><i class="fas fa-upload"></i> Choose CSV File</span>
+          <small id="player-sheet-file-name">No file selected</small>
+        </label>
       </div>
       <div class="form-group" style="margin-top:14px">
-        <label>Player Data</label>
-        <textarea id="f-bulk" class="form-input" rows="10" placeholder="Rohit Sharma, MI, batsman, 45, India&#10;Jasprit Bumrah, MI, bowler, 93, India"></textarea>
+        <label>Paste Rows From Excel Or CSV</label>
+        <textarea id="f-bulk" class="form-input" rows="10" placeholder="Player Name,Team Code,Role,Jersey Number,Country,Matches Played,Total Runs,Total Wickets&#10;Rohit Sharma,MI,batsman,45,India,0,0,0"></textarea>
       </div>
     </div>
     <div class="modal-foot"><button class="btn-ghost" onclick="closeModal('modal-bulk-players')">Cancel</button><button class="btn-primary" onclick="bulkAddPlayers()"><i class="fas fa-file-import"></i> Import Players</button></div>

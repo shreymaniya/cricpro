@@ -19,6 +19,10 @@ $method   = $_SERVER['REQUEST_METHOD'];
 $resource = $_GET['resource'] ?? '';
 $id       = isset($_GET['id']) ? (int)$_GET['id'] : null;
 
+if ($method !== 'GET') {
+    requireAdminAuth(true);
+}
+
 match($resource) {
     'groups'      => handleGroups($method, $id),
     'teams'       => handleTeams($method, $id),
@@ -39,6 +43,54 @@ function resolveGroupId(PDO $db, ?string $groupName): ?int {
     $groupId = $stmt->fetchColumn();
 
     return $groupId !== false ? (int)$groupId : null;
+}
+
+function getTeamCodeById(PDO $db, int $id): ?string {
+    $stmt = $db->prepare("SELECT code FROM teams WHERE id = :id LIMIT 1");
+    $stmt->execute(['id' => $id]);
+    $code = $stmt->fetchColumn();
+
+    return $code !== false ? (string)$code : null;
+}
+
+function deleteMatchesByIds(PDO $db, array $matchIds): void {
+    if (!$matchIds) {
+        return;
+    }
+
+    $scorecardDelete = $db->prepare("DELETE FROM match_scorecard WHERE match_id = :id");
+    $matchDelete = $db->prepare("DELETE FROM matches WHERE id = :id");
+
+    foreach ($matchIds as $matchId) {
+        $scorecardDelete->execute(['id' => (int)$matchId]);
+        $matchDelete->execute(['id' => (int)$matchId]);
+    }
+}
+
+function deleteTeamCascade(PDO $db, int $id): void {
+    $teamCode = getTeamCodeById($db, $id);
+    if ($teamCode === null) {
+        throw new RuntimeException('Team not found');
+    }
+
+    $matchStmt = $db->prepare(
+        "SELECT id
+         FROM matches
+         WHERE team1_code = :team1_code OR team2_code = :team2_code"
+    );
+    $matchStmt->execute([
+        'team1_code' => $teamCode,
+        'team2_code' => $teamCode,
+    ]);
+    $matchIds = array_map('intval', $matchStmt->fetchAll(PDO::FETCH_COLUMN));
+
+    deleteMatchesByIds($db, $matchIds);
+
+    $db->prepare("DELETE FROM players WHERE team_code = :team_code")
+       ->execute(['team_code' => $teamCode]);
+
+    $db->prepare("DELETE FROM teams WHERE id = :id")
+       ->execute(['id' => $id]);
 }
 
 function upsertMatchScorecard(PDO $db, int $matchId, ?array $scorecard): void {
@@ -250,8 +302,15 @@ function handleGroups(string $m, ?int $id): void {
             respond(['id' => (int)$db->lastInsertId(), 'message' => 'Group created'], 201);
         case 'DELETE':
             if (!$id) respond(['error' => 'id required'], 422);
-            $db->prepare("UPDATE teams SET group_name=NULL, group_id=NULL WHERE group_id=:id OR group_name=(SELECT name FROM groups WHERE id=:id)")->execute(['id'=>$id]);
-            $db->prepare("DELETE FROM groups WHERE id=:id")->execute(['id'=>$id]);
+            $groupNameStmt = $db->prepare("SELECT name FROM groups WHERE id = :id LIMIT 1");
+            $groupNameStmt->execute(['id' => $id]);
+            $groupName = $groupNameStmt->fetchColumn();
+            $db->prepare("UPDATE teams SET group_name = NULL, group_id = NULL WHERE group_id = :group_id OR group_name = :group_name")
+               ->execute([
+                   'group_id' => $id,
+                   'group_name' => $groupName !== false ? $groupName : null,
+                ]);
+            $db->prepare("DELETE FROM groups WHERE id = :id")->execute(['id' => $id]);
             respond(['message' => 'Group deleted']);
         default: respond(['error' => 'Method not allowed'], 405);
     }
@@ -304,7 +363,18 @@ function handleTeams(string $m, ?int $id): void {
 
         case 'DELETE':
             if (!$id) respond(['error'=>'id required'],422);
-            $db->prepare("DELETE FROM teams WHERE id=:id")->execute(['id'=>$id]);
+            $db->beginTransaction();
+            try {
+                deleteTeamCascade($db, $id);
+                recalculateTeamStandings($db);
+                recalculatePlayerStats($db);
+                $db->commit();
+            } catch (Throwable $e) {
+                if ($db->inTransaction()) {
+                    $db->rollBack();
+                }
+                respond(['error' => $e->getMessage()], 500);
+            }
             respond(['message'=>'Team deleted']);
 
         default: respond(['error'=>'Method not allowed'],405);
@@ -338,6 +408,15 @@ function handlePlayers(string $m, ?int $id): void {
             $added++;
         }
         respond(['added' => $added, 'message' => "$added players imported"], 201);
+    }
+
+    if ($m === 'DELETE' && isset($_GET['all'])) {
+        $deleted = (int)$db->query("SELECT COUNT(*) FROM players")->fetchColumn();
+        $db->exec("DELETE FROM players");
+        respond([
+            'deleted' => $deleted,
+            'message' => $deleted ? 'All players cleared' : 'No players to clear',
+        ]);
     }
 
     switch ($m) {
@@ -423,6 +502,24 @@ function handleMatches(string $m, ?int $id): void {
                     recalculatePlayerStats($db);
                     $db->commit(); respond(['message'=>'Result saved, NRR and player stats updated']);
                 } catch(Exception $e){ $db->rollBack(); respond(['error'=>$e->getMessage()],500); }
+            } elseif (isset($_GET['reopen'])) {
+                $db->beginTransaction();
+                try {
+                    $scorecard = is_array($b['scorecard'] ?? null) ? $b['scorecard'] : null;
+                    $db->prepare("UPDATE matches SET status=:status, score1=:s1, score2=:s2, winner_code=NULL, result_summary='', player_of_match='', scorecard_json=:sc WHERE id=:id")
+                       ->execute([
+                           'status'=>$b['status'] ?? 'live',
+                           's1'=>$b['score1'] ?? '',
+                           's2'=>$b['score2'] ?? '',
+                           'sc'=>json_encode($scorecard),
+                           'id'=>$id
+                        ]);
+                    upsertMatchScorecard($db, $id, $scorecard);
+                    recalculateTeamStandings($db);
+                    recalculatePlayerStats($db);
+                    $db->commit();
+                    respond(['message'=>'Match reopened']);
+                } catch(Exception $e){ $db->rollBack(); respond(['error'=>$e->getMessage()],500); }
             } else {
                 $fields = [];
                 $params = ['id' => $id];
@@ -483,9 +580,12 @@ function recalcNRR(PDO $db, string $code): void {
     $stmt=$db->prepare(
         "SELECT m.team1_code, m.team2_code, m.overs_per_innings, m.max_wickets, m.scorecard_json
          FROM matches m
-         WHERE m.status='completed' AND (m.team1_code=:c OR m.team2_code=:c)"
+         WHERE m.status='completed' AND (m.team1_code=:team1_code OR m.team2_code=:team2_code)"
     );
-    $stmt->execute(['c'=>$code]);
+    $stmt->execute([
+        'team1_code' => $code,
+        'team2_code' => $code,
+    ]);
     $rows=$stmt->fetchAll();
     $rsTotal=0.0;$obFaced=0.0;$rcTotal=0.0;$obBowled=0.0;
     foreach($rows as $r){

@@ -707,6 +707,277 @@ function buildScorecardHTML(m, sc) {
 }
 
 // ─── PLAYERS ─────────────────────────────────────────────────
+const PLAYER_SHEET_COLUMNS = [
+  { key:'name', header:'Player Name' },
+  { key:'team_code', header:'Team Code' },
+  { key:'role', header:'Role' },
+  { key:'jersey_number', header:'Jersey Number' },
+  { key:'nationality', header:'Country' },
+  { key:'matches_played', header:'Matches Played' },
+  { key:'total_runs', header:'Total Runs' },
+  { key:'total_wickets', header:'Total Wickets' },
+];
+
+const PLAYER_SHEET_HEADER_MAP = {
+  'player name':'name',
+  'name':'name',
+  'team code':'team_code',
+  'team':'team_code',
+  'teamcode':'team_code',
+  'role':'role',
+  'jersey number':'jersey_number',
+  'jersey no':'jersey_number',
+  'jersey':'jersey_number',
+  'country':'nationality',
+  'nationality':'nationality',
+  'matches played':'matches_played',
+  'matches':'matches_played',
+  'total runs':'total_runs',
+  'runs':'total_runs',
+  'total wickets':'total_wickets',
+  'wickets':'total_wickets',
+};
+
+function quoteCsvValue(value) {
+  const text = String(value ?? '');
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function buildPlayerSheetCsv(rows) {
+  const header = PLAYER_SHEET_COLUMNS.map(col => quoteCsvValue(col.header)).join(',');
+  const body = rows.map(row => PLAYER_SHEET_COLUMNS
+    .map(col => quoteCsvValue(row[col.key] ?? ''))
+    .join(','));
+  return [header, ...body].join('\r\n');
+}
+
+function downloadTextFile(filename, content, type='text/csv;charset=utf-8;') {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function normalizeSheetHeader(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function parseDelimitedText(text, delimiter) {
+  const rows = [];
+  let row = [];
+  let cell = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const next = text[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && next === '"') {
+        cell += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (!inQuotes && char === delimiter) {
+      row.push(cell);
+      cell = '';
+      continue;
+    }
+
+    if (!inQuotes && char === '\n') {
+      row.push(cell);
+      if (row.some(value => String(value).trim() !== '')) rows.push(row);
+      row = [];
+      cell = '';
+      continue;
+    }
+
+    if (!inQuotes && char === '\r') {
+      continue;
+    }
+
+    cell += char;
+  }
+
+  if (cell !== '' || row.length) {
+    row.push(cell);
+    if (row.some(value => String(value).trim() !== '')) rows.push(row);
+  }
+
+  return rows;
+}
+
+function detectSheetDelimiter(text) {
+  const firstLine = text.split(/\r?\n/).find(line => line.trim()) || '';
+  return firstLine.includes('\t') && !firstLine.includes(',') ? '\t' : ',';
+}
+
+function normalizePlayerRole(role) {
+  const clean = String(role || '').toLowerCase().replace(/[^a-z]/g, '');
+  return ['batsman','bowler','allrounder','wicketkeeper'].includes(clean) ? clean : 'batsman';
+}
+
+function parseNumberField(value) {
+  const num = parseInt(String(value ?? '').trim(), 10);
+  return Number.isNaN(num) ? 0 : num;
+}
+
+function parseLegacyPlayerLines(text) {
+  const lines = text.split(/\r?\n/).filter(line => line.trim());
+  let skipped = 0;
+  const payload = [];
+
+  lines.forEach((line) => {
+    const parts = line.split(',').map(part => part.trim());
+    if (parts.length < 2) {
+      skipped++;
+      return;
+    }
+
+    const [name, code, role, jersey, country, matchesPlayed, totalRuns, totalWickets] = parts;
+    if (!name || !code) {
+      skipped++;
+      return;
+    }
+
+    payload.push({
+      name,
+      team_code: code.toUpperCase(),
+      role: normalizePlayerRole(role),
+      jersey_number: parseNumberField(jersey) || null,
+      nationality: country || '',
+      matches_played: parseNumberField(matchesPlayed),
+      total_runs: parseNumberField(totalRuns),
+      total_wickets: parseNumberField(totalWickets),
+    });
+  });
+
+  return { payload, skipped };
+}
+
+function parsePlayerSheet(text) {
+  const delimiter = detectSheetDelimiter(text);
+  const rows = parseDelimitedText(text, delimiter);
+  if (!rows.length) return { payload: [], skipped: 0, error: 'No data found in the selected sheet' };
+
+  const headerMap = rows[0].map(value => PLAYER_SHEET_HEADER_MAP[normalizeSheetHeader(value)] || null);
+  const hasHeader = headerMap.includes('name') && headerMap.includes('team_code');
+
+  if (!hasHeader) {
+    return parseLegacyPlayerLines(text);
+  }
+
+  let skipped = 0;
+  const payload = [];
+
+  rows.slice(1).forEach((row) => {
+    const record = {};
+    headerMap.forEach((key, index) => {
+      if (key) record[key] = String(row[index] ?? '').trim();
+    });
+
+    if (!Object.values(record).some(value => value)) return;
+    if (!record.name || !record.team_code) {
+      skipped++;
+      return;
+    }
+
+    payload.push({
+      name: record.name,
+      team_code: record.team_code.toUpperCase(),
+      role: normalizePlayerRole(record.role),
+      jersey_number: parseNumberField(record.jersey_number) || null,
+      nationality: record.nationality || '',
+      matches_played: parseNumberField(record.matches_played),
+      total_runs: parseNumberField(record.total_runs),
+      total_wickets: parseNumberField(record.total_wickets),
+    });
+  });
+
+  return { payload, skipped };
+}
+
+function readTextFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Could not read the selected file'));
+    reader.readAsText(file);
+  });
+}
+
+function updatePlayerSheetFileName() {
+  const input = document.getElementById('f-bulk-file');
+  const label = document.getElementById('player-sheet-file-name');
+  if (!input || !label) return;
+  label.textContent = input.files?.[0]?.name || 'No file selected';
+}
+
+function resetPlayerSheetModal() {
+  const textarea = document.getElementById('f-bulk');
+  const input = document.getElementById('f-bulk-file');
+  if (textarea) textarea.value = '';
+  if (input) input.value = '';
+  updatePlayerSheetFileName();
+}
+
+function openPlayerSheetModal() {
+  resetPlayerSheetModal();
+  openModal('modal-bulk-players');
+}
+
+function downloadPlayerTemplate() {
+  const sampleRows = [
+    {
+      name:'Rohit Sharma',
+      team_code:'MI',
+      role:'batsman',
+      jersey_number:45,
+      nationality:'India',
+      matches_played:0,
+      total_runs:0,
+      total_wickets:0,
+    },
+    {
+      name:'Jasprit Bumrah',
+      team_code:'MI',
+      role:'bowler',
+      jersey_number:93,
+      nationality:'India',
+      matches_played:0,
+      total_runs:0,
+      total_wickets:0,
+    },
+  ];
+  downloadTextFile('player-import-template.csv', buildPlayerSheetCsv(sampleRows));
+  showToast('Player template downloaded');
+}
+
+function exportPlayersSheet() {
+  if (!players.length) return showToast('No players to export', 'error');
+  const rows = players.map(player => ({
+    name: player.name,
+    team_code: player.team,
+    role: player.role,
+    jersey_number: player.jersey || '',
+    nationality: player.country || '',
+    matches_played: player.m || 0,
+    total_runs: player.runs || 0,
+    total_wickets: player.wkts || 0,
+  }));
+  downloadTextFile('players-export.csv', buildPlayerSheetCsv(rows));
+  showToast('Players exported');
+}
+
 function renderPlayers() {
   let list = playerFilter==='all' ? players : players.filter(p=>p.role===playerFilter);
   const tbody = document.getElementById('players-tbody');
@@ -833,43 +1104,49 @@ async function deletePlayer(id) {
   }
 }
 
-async function bulkAddPlayers() {
-  const raw=document.getElementById('f-bulk').value.trim();
-  if(!raw) return showToast('No data entered','error');
-  const lines=raw.split('\n').filter(l=>l.trim());
-  let errs=0;
-  const payload = [];
-  lines.forEach((line,idx)=>{
-    const parts=line.split(',').map(s=>s.trim());
-    if(parts.length<2){errs++;return;}
-    const [name,code,...rest]=parts;
-    const role=(rest[0]||'batsman').toLowerCase().replace(/[^a-z]/g,'');
-    const validRole=['batsman','bowler','allrounder','wicketkeeper'].includes(role)?role:'batsman';
-    const jersey=parseInt(rest[1])||0;
-    const country=rest[2]||'';
-    const teamCode=code.toUpperCase();
-    if(!name||!teamCode){errs++;return;}
-    payload.push({
-      name,
-      team_code:teamCode,
-      role:validRole,
-      jersey_number:jersey || null,
-      nationality:country
-    });
-  });
-  if (!payload.length) return showToast('No valid players found','error');
+async function clearAllPlayers() {
+  if (!players.length) return showToast('No players to clear', 'error');
+  if (!confirm(`Clear all ${players.length} players? This cannot be undone.`)) return;
   try {
+    const result = await apiRequest('players', {
+      method:'DELETE',
+      params:{ all:1 }
+    });
+    await loadAllData();
+    refreshCurrentView();
+    const deleted = Number(result?.deleted || 0);
+    showToast(`${deleted} player${deleted!==1?'s':''} cleared`);
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
+}
+
+async function bulkAddPlayers() {
+  const textarea = document.getElementById('f-bulk');
+  const fileInput = document.getElementById('f-bulk-file');
+  const raw = textarea?.value.trim() || '';
+  const file = fileInput?.files?.[0] || null;
+
+  if (!raw && !file) return showToast('Upload a CSV file or paste player rows', 'error');
+
+  try {
+    const text = raw || await readTextFile(file);
+    const parsed = parsePlayerSheet(text);
+    if (parsed.error) return showToast(parsed.error, 'error');
+    if (!parsed.payload.length) return showToast('No valid players found', 'error');
+
     const result = await apiRequest('players', {
       method:'POST',
       params:{ bulk:1 },
-      body:{ players:payload }
+      body:{ players:parsed.payload }
     });
     await loadAllData();
     refreshCurrentView();
     closeModal('modal-bulk-players');
-    document.getElementById('f-bulk').value='';
-    const added = Number(result?.added || payload.length);
-    showToast(`${added} player${added!==1?'s':''} imported${errs?', '+errs+' skipped':''}`);
+    resetPlayerSheetModal();
+    const added = Number(result?.added || parsed.payload.length);
+    const skipped = Number(parsed.skipped || 0);
+    showToast(`${added} player${added!==1?'s':''} imported${skipped ? `, ${skipped} skipped` : ''}`);
   } catch (error) {
     showToast(error.message, 'error');
   }
@@ -942,6 +1219,12 @@ document.querySelectorAll('.modal-overlay').forEach(o=>{
 
 // Redirect openAddTeam/Player buttons
 window.openAddTeam = openAddTeam;
+window.openPlayerSheetModal = openPlayerSheetModal;
+
+const playerSheetFileInput = document.getElementById('f-bulk-file');
+if (playerSheetFileInput) {
+  playerSheetFileInput.addEventListener('change', updatePlayerSheetFileName);
+}
 
 // ─── TOAST ───────────────────────────────────────────────────
 function showToast(msg, type='success') {
@@ -968,6 +1251,7 @@ const LS_DEF = {
   inn: 1, maxOvers:20, maxWickets:10,
   toss:{winner:null,choice:null},
   status:'idle', // idle|live|over_break|completed
+  history:[],
   innings:[null,null], // [0]=1st inn data, [1]=2nd inn data
 };
 
@@ -982,8 +1266,21 @@ function mkInnData(batTeam, bowlTeam) {
 }
 
 let LS = JSON.parse(localStorage.getItem('cp_live')) || JSON.parse(JSON.stringify(LS_DEF));
+if (!Array.isArray(LS.history)) LS.history = [];
 
 function saveLive() { localStorage.setItem('cp_live', JSON.stringify(LS)); }
+
+function cloneLiveSnapshot() {
+  const snapshot = JSON.parse(JSON.stringify(LS));
+  snapshot.history = [];
+  return snapshot;
+}
+
+function pushUndoSnapshot() {
+  if (!Array.isArray(LS.history)) LS.history = [];
+  LS.history.push(cloneLiveSnapshot());
+  if (LS.history.length > 30) LS.history.shift();
+}
 
 function currInn() { return LS.innings[LS.inn-1]; }
 
@@ -1049,6 +1346,7 @@ async function startLiveMatch() {
     matchId:id, t1:m.t1, t2:m.t2, battingFirst:batFirst,
     inn:1, maxOvers:m.overs, maxWickets:actualMaxW,
     toss:{winner:toss,choice}, status:'live',
+    history:[],
     innings:[mkInnData(batFirst,bowlFirst), mkInnData(bowlFirst,batFirst)],
   };
 
@@ -1117,6 +1415,7 @@ function addCustomRuns() {
 }
 
 function processBallEvent(ev) {
+  pushUndoSnapshot();
   const inn=currInn();
   const striker=inn.striker, bowler=inn.currentBowler;
   let runs=0, legal=true, ballCls='ob-dot', commText='', commSub='';
@@ -1229,6 +1528,7 @@ function showWicketModal() {
 }
 
 function confirmWicket() {
+  pushUndoSnapshot();
   const inn=currInn();
   const outBat=document.getElementById('f-wout').value;
   const newBat=document.getElementById('f-wnew').value;
@@ -1324,7 +1624,41 @@ async function endLiveMatch() {
   renderLivePage(); showToast('Live match ended');
 }
 
-function undoLastBall() { showToast('To undo: restart the over from the beginning','warn'); }
+async function undoLastBall() {
+  const history = Array.isArray(LS.history) ? [...LS.history] : [];
+  if (!history.length) return showToast('No ball to undo', 'warn');
+  const liveMatchId = LS.matchId;
+  const hadCompletedMatch = matches.find(m => m.id === liveMatchId)?.status === 'completed';
+  const previous = history.pop();
+  LS = previous;
+  LS.history = history;
+  clearTimeout(liveSyncTimer);
+  saveLive();
+  try {
+    if (hadCompletedMatch && liveMatchId) {
+      const inn1 = LS.innings[0];
+      const inn2 = LS.innings[1];
+      await apiRequest('matches', {
+        method:'PUT',
+        id:liveMatchId,
+        params:{ reopen:1 },
+        body:{
+          status:LS.status === 'over_break' ? 'live' : LS.status,
+          score1:inn1?`${inn1.runs}/${inn1.wickets}`:'',
+          score2:inn2&&inn2.balls>0?`${inn2.runs}/${inn2.wickets}`:'',
+          scorecard:{inn1,inn2},
+        }
+      });
+      await loadAllData();
+    } else {
+      syncMatch();
+    }
+    renderLivePage();
+    showToast('Last ball undone');
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
+}
 
 function rotateStrike() {
   const inn=currInn();
@@ -1511,6 +1845,8 @@ function queueLiveMatchSync() {
           status:LS.status === 'over_break' ? 'live' : LS.status,
           score1:inn1?`${inn1.runs}/${inn1.wickets}`:'',
           score2:inn2&&inn2.balls>0?`${inn2.runs}/${inn2.wickets}`:'',
+          result_summary:'',
+          player_of_match:'',
           scorecard:{inn1,inn2},
         }
       });
@@ -1586,6 +1922,8 @@ function syncMatch() {
   matches[mIdx].status='live';
   matches[mIdx].s1=inn1?`${inn1.runs}/${inn1.wickets}`:'';
   matches[mIdx].s2=inn2&&inn2.balls>0?`${inn2.runs}/${inn2.wickets}`:'';
+  matches[mIdx].summary='';
+  matches[mIdx].winner=null;
   queueLiveMatchSync();
   if(document.getElementById('page-dashboard').classList.contains('active')) renderDashboard();
 }

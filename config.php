@@ -14,12 +14,33 @@ define('DB_PASS',   '');
 define('DB_PORT',   3306);
 
 // ============================================================
+// ADMIN ACCESS CONFIGURATION
+// ============================================================
+define('ADMIN_SESSION_KEY', 'cricpro_admin_logged_in');
+define('ADMIN_USERNAME', getenv('CRICPRO_ADMIN_USER') ?: 'shrey');
+define(
+    'ADMIN_PASSWORD_HASH',
+    getenv('CRICPRO_ADMIN_PASSWORD_HASH') ?: '$2y$10$.FW3S.0A3JLMLt3tYf7feuvciYglUBWme07Yr4Cg9PuCDMNExrFYS'
+);
+
+/**
+ * Start the PHP session once for auth-protected pages and API writes.
+ */
+function startAppSession(): void {
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+}
+
+startAppSession();
+
+// ============================================================
 // Live server DATABASE CONFIGURATION
 // ============================================================
 // define('DB_HOST',   'sql102.infinityfree.com');
-// define('DB_NAME',   'if0_40799604_cricketpro');
-// define('DB_USER',   'if0_40799604');
-// define('DB_PASS',   'pxwRovrRZtbfZ');
+// define('DB_NAME',   'if0_41432424_cricketpro');
+// define('DB_USER',   'if0_41432424');
+// define('DB_PASS',   'v0ZdOa04wB');
 // define('DB_PORT',   3306);
 
 // ============================================================
@@ -72,6 +93,61 @@ function respond(mixed $data, int $code = 200): void {
     http_response_code($code);
     echo json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     exit;
+}
+
+/**
+ * Redirect to another local page.
+ */
+function redirectTo(string $path): void {
+    header('Location: ' . $path);
+    exit;
+}
+
+/**
+ * Check whether the admin is logged in.
+ */
+function isAdminLoggedIn(): bool {
+    return !empty($_SESSION[ADMIN_SESSION_KEY]);
+}
+
+/**
+ * Attempt admin login using configured credentials.
+ */
+function loginAdmin(string $username, string $password): bool {
+    $valid = hash_equals(ADMIN_USERNAME, trim($username))
+        && password_verify($password, ADMIN_PASSWORD_HASH);
+
+    if ($valid) {
+        $_SESSION[ADMIN_SESSION_KEY] = true;
+        $_SESSION['cricpro_admin_name'] = ADMIN_USERNAME;
+        session_regenerate_id(true);
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * Log the admin out cleanly.
+ */
+function logoutAdmin(): void {
+    unset($_SESSION[ADMIN_SESSION_KEY], $_SESSION['cricpro_admin_name']);
+    session_regenerate_id(true);
+}
+
+/**
+ * Guard admin-only pages or API actions.
+ */
+function requireAdminAuth(bool $jsonResponse = true): void {
+    if (isAdminLoggedIn()) {
+        return;
+    }
+
+    if ($jsonResponse) {
+        respond(['error' => 'Admin login required'], 401);
+    }
+
+    redirectTo('login.php');
 }
 
 /**
